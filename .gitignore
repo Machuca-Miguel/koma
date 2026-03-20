@@ -1,0 +1,27 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (NUNCA subir)
+.env
+.env.local
+.env.production
+
+# Build
+dist/
+build/
+.next/
+
+# Prisma
+generated/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,110 @@
+// ComicVault — Prisma Schema
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── MODELOS ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  userComics   UserComic[]
+  collections  Collection[]
+
+  @@map("users")
+}
+
+model Comic {
+  id          String   @id @default(cuid())
+  title       String
+  issueNumber String?  @map("issue_number")
+  publisher   String?
+  year        Int?
+  synopsis    String?  @db.Text
+  coverUrl    String?  @map("cover_url")
+  // ID del cómic en la API externa (Comic Vine, Marvel, etc.)
+  externalId  String?  @map("external_id")
+  externalApi String?  @map("external_api") // "comic_vine" | "marvel"
+  // Metadatos variables de APIs externas guardados como JSON
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  userComics  UserComic[]
+  tags        ComicTag[]
+
+  @@map("comics")
+}
+
+// Tabla pivote: relación Usuario ↔ Cómic con estado personalizado
+model UserComic {
+  id        String          @id @default(cuid())
+  status    CollectionStatus
+  rating    Int?            // 1-5, null si no ha puntuado
+  notes     String?         @db.Text
+  addedAt   DateTime        @default(now()) @map("added_at")
+
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String @map("user_id")
+  comic     Comic  @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  comicId   String @map("comic_id")
+
+  // Un usuario no puede tener el mismo cómic duplicado en su colección
+  @@unique([userId, comicId])
+  @@map("user_comics")
+}
+
+enum CollectionStatus {
+  OWNED     // Lo tengo físicamente
+  READ      // Lo he leído
+  WISHLIST  // Lo quiero conseguir
+  FAVORITE  // Es favorito
+}
+
+// Colecciones temáticas creadas por el usuario (ej: "Mi colección de Batman")
+model Collection {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+  isPublic    Boolean @default(false) @map("is_public")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String  @map("user_id")
+
+  @@map("collections")
+}
+
+// Tags para categorizar cómics (ej: "superhéroe", "noir", "dc-universe")
+// El agente IA los asignará automáticamente basándose en la sinopsis
+model Tag {
+  id     String     @id @default(cuid())
+  name   String     @unique
+  slug   String     @unique // "super-heroe", "noir"
+
+  comics ComicTag[]
+
+  @@map("tags")
+}
+
+// Relación M:N entre Comic y Tag
+model ComicTag {
+  comic   Comic  @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  comicId String @map("comic_id")
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId   String @map("tag_id")
+
+  @@id([comicId, tagId])
+  @@map("comic_tags")
+}
