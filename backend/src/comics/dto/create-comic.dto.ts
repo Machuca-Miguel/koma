@@ -1,12 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsString,
-  IsOptional,
-  IsInt,
-  Min,
-  Max,
-  IsUrl,
-} from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsUrl } from 'class-validator';
 
 export class CreateComicDto {
   @ApiProperty({ example: 'Batman: Year One' })
@@ -30,7 +23,9 @@ export class CreateComicDto {
   @IsOptional()
   year?: number;
 
-  @ApiPropertyOptional({ example: 'Bruce Wayne descubre su camino hacia convertirse en Batman...' })
+  @ApiPropertyOptional({
+    example: 'Bruce Wayne descubre su camino hacia convertirse en Batman...',
+  })
   @IsString()
   @IsOptional()
   synopsis?: string;
@@ -45,7 +40,10 @@ export class CreateComicDto {
   @IsOptional()
   externalId?: string;
 
-  @ApiPropertyOptional({ example: 'comic_vine', enum: ['comic_vine', 'marvel'] })
+  @ApiPropertyOptional({
+    example: 'comic_vine',
+    enum: ['comic_vine', 'marvel'],
+  })
   @IsString()
   @IsOptional()
   externalApi?: string;

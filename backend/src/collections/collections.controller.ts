@@ -14,6 +14,7 @@ import { CollectionsService } from './collections.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../auth/authenticated-request.interface';
 
 @ApiTags('collections')
 @ApiBearerAuth()
@@ -24,26 +25,26 @@ export class CollectionsController {
 
   @Get()
   @ApiOperation({ summary: 'Listar mis colecciones' })
-  findAll(@Request() req: any) {
+  findAll(@Request() req: AuthenticatedRequest) {
     return this.collectionsService.findAllByUser(req.user.id);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener una colección' })
-  findOne(@Request() req: any, @Param('id') id: string) {
+  findOne(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.collectionsService.findOne(id, req.user.id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Crear una colección' })
-  create(@Request() req: any, @Body() dto: CreateCollectionDto) {
+  create(@Request() req: AuthenticatedRequest, @Body() dto: CreateCollectionDto) {
     return this.collectionsService.create(req.user.id, dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar una colección' })
   update(
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Body() dto: UpdateCollectionDto,
   ) {
@@ -52,7 +53,33 @@ export class CollectionsController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar una colección' })
-  remove(@Request() req: any, @Param('id') id: string) {
+  remove(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.collectionsService.remove(id, req.user.id);
+  }
+
+  @Get(':id/comics')
+  @ApiOperation({ summary: 'Listar cómics de una colección' })
+  findComics(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.collectionsService.findComics(id, req.user.id);
+  }
+
+  @Post(':id/comics')
+  @ApiOperation({ summary: 'Añadir un cómic a una colección' })
+  addComic(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body('comicId') comicId: string,
+  ) {
+    return this.collectionsService.addComic(id, req.user.id, comicId);
+  }
+
+  @Delete(':id/comics/:comicId')
+  @ApiOperation({ summary: 'Quitar un cómic de una colección' })
+  removeComic(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('comicId') comicId: string,
+  ) {
+    return this.collectionsService.removeComic(id, req.user.id, comicId);
   }
 }

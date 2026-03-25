@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsBoolean, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateCollectionDto {
   @ApiProperty({ example: 'Mi colección de Batman' })
@@ -13,7 +19,10 @@ export class CreateCollectionDto {
   @IsOptional()
   description?: string;
 
-  @ApiPropertyOptional({ default: false, description: 'Si es pública, otros usuarios pueden verla' })
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Si es pública, otros usuarios pueden verla',
+  })
   @IsBoolean()
   @IsOptional()
   isPublic?: boolean;

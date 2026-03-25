@@ -1,3 +1,4 @@
+import type { StringValue } from 'ms';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -17,7 +18,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: (config.get<string>('JWT_EXPIRES_IN', '7d') as any),
+          expiresIn: config.get<string>('JWT_EXPIRES_IN', '7d') as unknown as StringValue,
         },
       }),
     }),

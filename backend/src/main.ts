@@ -9,11 +9,15 @@ async function bootstrap() {
   app.enableCors();
 
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
   );
 
   const config = new DocumentBuilder()
-    .setTitle('ComicVault API')
+    .setTitle('Koma API')
     .setDescription('API para gestionar tu colección de cómics')
     .setVersion('1.0')
     .addBearerAuth()

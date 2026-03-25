@@ -58,18 +58,18 @@
 :root {
     /* Semántica de color */
     --primary:             #00B8A7;
-    --primary-foreground:  #0F172A; /* texto oscuro sobre teal — contraste ≥ 4.5:1 */
+    --primary-foreground:  #121212; /* texto oscuro sobre teal — contraste ≥ 4.5:1 */
     --accent:              #FF8A65;
-    --accent-foreground:   #0F172A;
+    --accent-foreground:   #121212;
     --destructive:         #F43F5E;
 
     /* Superficies — modo claro */
     --background:          #F8FAFC;
-    --foreground:          #0F172A;
+    --foreground:          #121212;
     --card:                #FFFFFF;
-    --card-foreground:     #0F172A;
+    --card-foreground:     #121212;
     --popover:             #FFFFFF;
-    --popover-foreground:  #0F172A;
+    --popover-foreground:  #121212;
 
     /* Niveles de texto */
     --muted:               #F1F5F9;
@@ -77,7 +77,7 @@
 
     /* Secundario (chips, tags, hover suave) */
     --secondary:           #E2E8F0;
-    --secondary-foreground:#0F172A;
+    --secondary-foreground:#121212;
 
     /* Bordes e inputs */
     --border:              #E2E8F0;
@@ -93,11 +93,11 @@
 
     /* Sidebar */
     --sidebar:                    #FFFFFF;
-    --sidebar-foreground:         #0F172A;
+    --sidebar-foreground:         #121212;
     --sidebar-primary:            #00B8A7;
-    --sidebar-primary-foreground: #0F172A;
+    --sidebar-primary-foreground: #121212;
     --sidebar-accent:             #F1F5F9;
-    --sidebar-accent-foreground:  #0F172A;
+    --sidebar-accent-foreground:  #121212;
     --sidebar-border:             #E2E8F0;
     --sidebar-ring:               #00B8A7;
 
@@ -111,35 +111,35 @@
 }
 
 .dark {
-    /* Superficies — modo oscuro */
-    --background:          #0F172A;
-    --foreground:          #F1F5F9;
-    --card:                #1E293B;
-    --card-foreground:     #F1F5F9;
-    --popover:             #1E293B;
-    --popover-foreground:  #F1F5F9;
+    /* Superficies — modo oscuro (Gris Neutro/Zinc) */
+    --background:          #121212; /* Gris casi negro, muy profundo y neutro */
+    --foreground:          #FAFAFA; /* Blanco suave para no cansar la vista */
+    --card:                #1C1C1C; /* Ligera elevación respecto al fondo */
+    --card-foreground:     #FAFAFA;
+    --popover:             #1C1C1C;
+    --popover-foreground:  #FAFAFA;
 
     /* Niveles de texto */
-    --muted:               #1E293B;
-    --muted-foreground:    #94A3B8;
+    --muted:               #27272A; /* Fondo tenue para elementos inactivos */
+    --muted-foreground:    #A1A1AA; /* Texto secundario gris medio */
 
     /* Secundario */
-    --secondary:           #334155;
-    --secondary-foreground:#F1F5F9;
+    --secondary:           #27272A;
+    --secondary-foreground:#FAFAFA;
 
     /* Bordes e inputs */
-    --border:              #334155;
-    --input:               #334155;
+    --border:              #2E2E32; /* Borde sutil que no compite con el contenido */
+    --input:               #2E2E32;
 
-    /* Los colores de marca se mantienen idénticos en ambos modos */
+    /* Los colores de marca se mantienen idénticos */
     --primary:             #00B8A7;
-    --primary-foreground:  #0F172A;
+    --primary-foreground:  #121212; /* Cambiado para mantener alto contraste sobre el menta */
     --accent:              #FF8A65;
-    --accent-foreground:   #0F172A;
+    --accent-foreground:   #121212;
     --destructive:         #F43F5E;
     --ring:                #00B8A7;
 
-    /* Charts */
+    /* Charts (Sin cambios) */
     --chart-1:             #00B8A7;
     --chart-2:             #FF8A65;
     --chart-3:             #F43F5E;
@@ -147,13 +147,13 @@
     --chart-5:             #A78BFA;
 
     /* Sidebar */
-    --sidebar:                    #1E293B;
-    --sidebar-foreground:         #F1F5F9;
+    --sidebar:                    #1C1C1C;
+    --sidebar-foreground:         #FAFAFA;
     --sidebar-primary:            #00B8A7;
-    --sidebar-primary-foreground: #0F172A;
-    --sidebar-accent:             #334155;
-    --sidebar-accent-foreground:  #F1F5F9;
-    --sidebar-border:             #334155;
+    --sidebar-primary-foreground: #121212;
+    --sidebar-accent:             #27272A;
+    --sidebar-accent-foreground:  #FAFAFA;
+    --sidebar-border:             #2E2E32;
     --sidebar-ring:               #00B8A7;
 
     /* Elevación — modo oscuro: sin sombras, bordes como delimitadores */

@@ -4,6 +4,7 @@ export interface User {
   id: string
   email: string
   username: string
+  language: string
 }
 
 export interface AuthResponse {
@@ -12,6 +13,12 @@ export interface AuthResponse {
 }
 
 // ─── Comics ────────────────────────────────────────────────────────────────
+
+export interface Tag {
+  id: string
+  name: string
+  slug: string
+}
 
 export interface Comic {
   id: string
@@ -24,6 +31,7 @@ export interface Comic {
   externalId?: string
   externalApi?: string
   createdAt: string
+  tags?: { tag: Tag }[]
 }
 
 export type CollectionStatus = 'OWNED' | 'READ' | 'WISHLIST' | 'FAVORITE'
@@ -46,15 +54,20 @@ export interface Collection {
   isPublic: boolean
   createdAt: string
   userId: string
+  _count?: { comics: number }
 }
 
-// ─── External API ──────────────────────────────────────────────────────────
+export interface CollectionComic {
+  collectionId: string
+  comicId: string
+  addedAt: string
+  comic: Comic
+}
 
-export type ExternalSource = 'comic_vine' | 'metron'
+// ─── GCD ───────────────────────────────────────────────────────────────────
 
-export interface ExternalComic {
+export interface GcdComic {
   externalId: string
-  externalApi: ExternalSource
   title: string
   issueNumber?: string
   publisher?: string
@@ -63,10 +76,59 @@ export interface ExternalComic {
   coverUrl?: string
 }
 
-export interface ExternalSearchResult {
-  data: ExternalComic[]
+export interface GcdSearchResult {
+  data: GcdComic[]
   total: number
   page: number
+}
+
+export interface GcdCreatorRole {
+  role: string
+  names: string[]
+}
+
+export interface GcdStory {
+  title?: string
+  type?: string
+  pageCount?: number
+  synopsis?: string
+  genre?: string
+  characters?: string
+  feature?: string
+  firstLine?: string
+}
+
+export interface GcdSeriesInfo {
+  name: string
+  format?: string
+  yearBegan?: number
+  yearEnded?: number
+  issueCount?: number
+  publicationDates?: string
+  color?: string
+  dimensions?: string
+  paperStock?: string
+  binding?: string
+  publishingFormat?: string
+}
+
+export interface GcdPublisherInfo {
+  name: string
+  yearBegan?: number
+  yearEnded?: number
+  url?: string
+}
+
+export interface GcdComicDetail extends GcdComic {
+  pageCount?: number
+  price?: string
+  onSaleDate?: string
+  barcode?: string
+  isbn?: string
+  creators: GcdCreatorRole[]
+  stories: GcdStory[]
+  seriesInfo?: GcdSeriesInfo
+  publisherInfo?: GcdPublisherInfo
 }
 
 // ─── Pagination ────────────────────────────────────────────────────────────

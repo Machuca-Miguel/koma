@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { BookOpen, Folders, LayoutDashboard, Library, LogOut, Search } from 'lucide-react'
+import { BookOpen, Folders, LayoutDashboard, Library, LogOut, Search, Settings } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -13,16 +13,18 @@ import {
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import type { LucideIcon } from 'lucide-react'
 
-const navLinks: { to: string; label: string; Icon: LucideIcon }[] = [
-  { to: '/dashboard',    label: 'Inicio',        Icon: LayoutDashboard },
-  { to: '/library',      label: 'Mi Biblioteca', Icon: Library         },
-  { to: '/search',       label: 'Buscar',        Icon: Search          },
-  { to: '/collections',  label: 'Colecciones',   Icon: Folders         },
-]
-
 export function DashboardLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { t } = useTranslation()
+
+  const navLinks: { to: string; label: string; Icon: LucideIcon }[] = [
+    { to: '/dashboard',   label: t('nav.dashboard'),   Icon: LayoutDashboard },
+    { to: '/library',     label: t('nav.library'),     Icon: Library         },
+    { to: '/search',      label: t('nav.search'),      Icon: Search          },
+    { to: '/collections', label: t('nav.collections'), Icon: Folders         },
+    { to: '/settings',    label: t('nav.settings'),    Icon: Settings        },
+  ]
 
   const handleLogout = () => {
     logout()
@@ -30,26 +32,31 @@ export function DashboardLayout() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-dvh flex">
       {/* Sidebar */}
       <aside className="w-60 border-r bg-sidebar flex flex-col shrink-0">
-        <div className="flex items-center gap-2.5 p-5">
-          <BookOpen className="size-5 text-primary shrink-0" />
-          <h1 className="text-xl font-bold tracking-tight">ComicVault</h1>
+        {/* Logo + theme toggle */}
+        <div className="flex items-center justify-between px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <BookOpen className="size-5 text-primary shrink-0" />
+            <span className="text-lg font-bold tracking-tight">Koma</span>
+          </div>
+          <ThemeToggle />
         </div>
 
         <Separator />
 
-        <nav className="flex-1 p-3 space-y-1">
+        {/* Navigation */}
+        <nav className="flex-1 p-3 space-y-0.5">
           {navLinks.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                 }`
               }
             >
@@ -61,38 +68,33 @@ export function DashboardLayout() {
 
         <Separator />
 
-        {/* Tema */}
-        <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-xs text-muted-foreground">Tema</span>
-          <ThemeToggle />
-        </div>
-
-        <Separator />
-
-        {/* Usuario */}
+        {/* User menu */}
         <div className="p-3">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start gap-3 px-3">
-                <Avatar className="size-7">
-                  <AvatarFallback className="text-xs">
-                    {user?.username.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm truncate">{user?.username}</span>
-              </Button>
+            <DropdownMenuTrigger className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-sidebar-accent transition-colors cursor-pointer outline-none">
+              <Avatar className="size-7 shrink-0">
+                <AvatarFallback className="text-xs bg-primary/10 text-primary font-medium">
+                  {user?.username.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="truncate flex-1 text-left text-sidebar-foreground">
+                {user?.username}
+              </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-48">
-              <DropdownMenuItem onClick={handleLogout} className="text-destructive gap-2">
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="text-destructive gap-2 cursor-pointer"
+              >
                 <LogOut className="size-4" />
-                Cerrar sesión
+                {t('nav.logout')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </aside>
 
-      {/* Contenido principal */}
+      {/* Main content */}
       <main className="flex-1 overflow-auto">
         <Outlet />
       </main>

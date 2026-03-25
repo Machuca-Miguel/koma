@@ -8,7 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { ComicsModule } from './comics/comics.module';
 import { UserComicsModule } from './user-comics/user-comics.module';
 import { CollectionsModule } from './collections/collections.module';
-import { ExternalComicsModule } from './external-comics/external-comics.module';
+import { GcdModule } from './gcd/gcd.module';
 
 @Module({
   imports: [
@@ -19,7 +19,7 @@ import { ExternalComicsModule } from './external-comics/external-comics.module';
     ComicsModule,
     UserComicsModule,
     CollectionsModule,
-    ExternalComicsModule,
+    GcdModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -25,7 +25,7 @@ export class UserComicsService {
         where,
         skip,
         take: limit,
-        include: { comic: true },
+        include: { comic: { include: { tags: { include: { tag: true } } } } },
         orderBy: { addedAt: 'desc' },
       }),
       this.prisma.userComic.count({ where }),
@@ -63,7 +63,8 @@ export class UserComicsService {
     const entry = await this.prisma.userComic.findUnique({
       where: { userId_comicId: { userId, comicId } },
     });
-    if (!entry) throw new NotFoundException('Cómic no encontrado en tu biblioteca');
+    if (!entry)
+      throw new NotFoundException('Cómic no encontrado en tu biblioteca');
 
     return this.prisma.userComic.update({
       where: { userId_comicId: { userId, comicId } },
@@ -76,9 +77,16 @@ export class UserComicsService {
     const entry = await this.prisma.userComic.findUnique({
       where: { userId_comicId: { userId, comicId } },
     });
-    if (!entry) throw new NotFoundException('Cómic no encontrado en tu biblioteca');
+    if (!entry)
+      throw new NotFoundException('Cómic no encontrado en tu biblioteca');
 
     return this.prisma.userComic.delete({
+      where: { userId_comicId: { userId, comicId } },
+    });
+  }
+
+  async findByComicId(userId: string, comicId: string) {
+    return this.prisma.userComic.findUnique({
       where: { userId_comicId: { userId, comicId } },
     });
   }

@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Collection } from '@/types'
+import type { Collection, CollectionComic } from '@/types'
 
 export const collectionsApi = {
   getAll: () =>
@@ -13,4 +13,13 @@ export const collectionsApi = {
 
   remove: (id: string) =>
     api.delete(`/collections/${id}`).then((r) => r.data),
+
+  getComics: (collectionId: string) =>
+    api.get<CollectionComic[]>(`/collections/${collectionId}/comics`).then((r) => r.data),
+
+  addComic: (collectionId: string, comicId: string) =>
+    api.post<CollectionComic>(`/collections/${collectionId}/comics`, { comicId }).then((r) => r.data),
+
+  removeComic: (collectionId: string, comicId: string) =>
+    api.delete(`/collections/${collectionId}/comics/${comicId}`).then((r) => r.data),
 }

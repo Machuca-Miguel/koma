@@ -24,11 +24,15 @@ export class AuthService {
     return result;
   }
 
-  async login(user: { id: string; email: string; username: string }) {
-    const payload = { sub: user.id, email: user.email, username: user.username };
+  login(user: { id: string; email: string; username: string; language: string }) {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      username: user.username,
+    };
     return {
       accessToken: this.jwtService.sign(payload),
-      user: { id: user.id, email: user.email, username: user.username },
+      user: { id: user.id, email: user.email, username: user.username, language: user.language },
     };
   }
 
@@ -38,10 +42,14 @@ export class AuthService {
       dto.username,
       dto.password,
     );
-    const payload = { sub: user.id, email: user.email, username: user.username };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      username: user.username,
+    };
     return {
       accessToken: this.jwtService.sign(payload),
-      user: { id: user.id, email: user.email, username: user.username },
+      user: { id: user.id, email: user.email, username: user.username, language: user.language },
     };
   }
 }

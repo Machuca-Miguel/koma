@@ -20,4 +20,7 @@ export const libraryApi = {
 
   remove: (comicId: string) =>
     api.delete(`/my-library/${comicId}`).then((r) => r.data),
+
+  getByComicId: (comicId: string) =>
+    api.get<UserComic | null>(`/my-library/comic/${comicId}`).then((r) => r.data),
 }

@@ -16,6 +16,7 @@ model User {
   email        String   @unique
   username     String   @unique
   passwordHash String   @map("password_hash")
+  language     String   @default("es") @map("language")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -41,8 +42,9 @@ model Comic {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  userComics  UserComic[]
-  tags        ComicTag[]
+  userComics   UserComic[]
+  tags         ComicTag[]
+  collections  CollectionComic[]
 
   @@map("comics")
 }
@@ -82,8 +84,21 @@ model Collection {
 
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String  @map("user_id")
+  comics      CollectionComic[]
 
   @@map("collections")
+}
+
+// Relación M:N entre Collection y Comic
+model CollectionComic {
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  collectionId String     @map("collection_id")
+  comic        Comic      @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  comicId      String     @map("comic_id")
+  addedAt      DateTime   @default(now()) @map("added_at")
+
+  @@id([collectionId, comicId])
+  @@map("collection_comics")
 }
 
 // Tags para categorizar cómics (ej: "superhéroe", "noir", "dc-universe")

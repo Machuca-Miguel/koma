@@ -1,12 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { LoginPage } from '@/pages/auth/LoginPage'
-import { RegisterPage } from '@/pages/auth/RegisterPage'
+import { AuthPage } from '@/pages/auth/AuthPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { SearchPage } from '@/pages/SearchPage'
 import { CollectionsPage } from '@/pages/CollectionsPage'
+import { ComicDetailPage } from '@/pages/ComicDetailPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -23,8 +24,8 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         {/* Rutas públicas */}
-        <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-        <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/login" element={<PublicRoute><AuthPage defaultMode="login" /></PublicRoute>} />
+        <Route path="/register" element={<PublicRoute><AuthPage defaultMode="register" /></PublicRoute>} />
 
         {/* Rutas protegidas */}
         <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
@@ -33,6 +34,8 @@ export function AppRouter() {
           <Route path="library" element={<LibraryPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="collections" element={<CollectionsPage />} />
+          <Route path="comics/:id" element={<ComicDetailPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
 
         {/* Fallback */}

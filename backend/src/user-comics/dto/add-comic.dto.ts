@@ -1,12 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsString,
-  IsOptional,
-  IsInt,
-  Min,
-  Max,
-  IsEnum,
-} from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsEnum } from 'class-validator';
 import { CollectionStatus } from '@prisma/client';
 
 export class AddComicDto {

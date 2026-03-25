@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react'
+import i18next from 'i18next'
 import type { User } from '@/types'
 
 interface AuthContextValue {
@@ -6,6 +7,7 @@ interface AuthContextValue {
   token: string | null
   login: (token: string, user: User) => void
   logout: () => void
+  updateUser: (user: User) => void
   isAuthenticated: boolean
 }
 
@@ -27,6 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback((newToken: string, newUser: User) => {
     localStorage.setItem('token', newToken)
     localStorage.setItem('user', JSON.stringify(newUser))
+    localStorage.setItem('i18n-lang', newUser.language)
+    void i18next.changeLanguage(newUser.language)
     setToken(newToken)
     setUser(newUser)
   }, [])
@@ -38,13 +42,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
   }, [])
 
+  const updateUser = useCallback((updatedUser: User) => {
+    localStorage.setItem('user', JSON.stringify(updatedUser))
+    setUser(updatedUser)
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser, isAuthenticated: !!token }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth debe usarse dentro de AuthProvider')
