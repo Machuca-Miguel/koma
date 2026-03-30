@@ -1,4 +1,4 @@
-// ComicVault — Prisma Schema
+// Koma — Prisma Schema
 // Docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -15,7 +15,9 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   username     String   @unique
-  passwordHash String   @map("password_hash")
+  passwordHash String?  @map("password_hash")
+  googleId     String?  @unique @map("google_id")
+  avatarUrl    String?  @map("avatar_url")
   language     String   @default("es") @map("language")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -27,20 +29,25 @@ model User {
 }
 
 model Comic {
-  id          String   @id @default(cuid())
-  title       String
-  issueNumber String?  @map("issue_number")
-  publisher   String?
-  year        Int?
-  synopsis    String?  @db.Text
-  coverUrl    String?  @map("cover_url")
+  id           String         @id @default(cuid())
+  title        String
+  issueNumber  String?        @map("issue_number")
+  publisher    String?
+  year         Int?
+  synopsis     String?        @db.Text
+  coverUrl     String?        @map("cover_url")
   // ID del cómic en la API externa (Comic Vine, Marvel, etc.)
-  externalId  String?  @map("external_id")
-  externalApi String?  @map("external_api") // "comic_vine" | "marvel"
+  externalId   String?        @map("external_id")
+  externalApi  String?        @map("external_api") // "comic_vine" | "marvel"
   // Metadatos variables de APIs externas guardados como JSON
-  metadata    Json?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  metadata     Json?
+  // Campos de coleccionista
+  isbn         String?
+  binding      BindingFormat?
+  drawingStyle String?        @map("drawing_style")
+  series       String?
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
 
   userComics   UserComic[]
   tags         ComicTag[]
@@ -51,11 +58,18 @@ model Comic {
 
 // Tabla pivote: relación Usuario ↔ Cómic con estado personalizado
 model UserComic {
-  id        String          @id @default(cuid())
-  status    CollectionStatus
-  rating    Int?            // 1-5, null si no ha puntuado
-  notes     String?         @db.Text
-  addedAt   DateTime        @default(now()) @map("added_at")
+  id         String   @id @default(cuid())
+  // Estados múltiples simultáneos (un cómic puede ser TENGO + LEÍDO + FAVORITO a la vez)
+  isOwned    Boolean  @default(false) @map("is_owned")
+  isRead     Boolean  @default(false) @map("is_read")
+  isWishlist Boolean  @default(false) @map("is_wishlist")
+  isFavorite Boolean  @default(false) @map("is_favorite")
+  // Préstamos
+  isLoaned   Boolean  @default(false) @map("is_loaned")
+  loanedTo   String?  @map("loaned_to")
+  rating     Int?                     // 1-5, null si no ha puntuado
+  notes      String?  @db.Text
+  addedAt    DateTime @default(now()) @map("added_at")
 
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String @map("user_id")
@@ -67,11 +81,12 @@ model UserComic {
   @@map("user_comics")
 }
 
-enum CollectionStatus {
-  OWNED     // Lo tengo físicamente
-  READ      // Lo he leído
-  WISHLIST  // Lo quiero conseguir
-  FAVORITE  // Es favorito
+enum BindingFormat {
+  CARTONE
+  TAPA_BLANDA
+  BOLSILLO
+  OMNIBUS
+  HARDCOVER
 }
 
 // Colecciones temáticas creadas por el usuario (ej: "Mi colección de Batman")

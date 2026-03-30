@@ -20,7 +20,15 @@
     "OWNED": "En colección",
     "READ": "Leído",
     "WISHLIST": "Lista de deseos",
-    "FAVORITE": "Favorito"
+    "FAVORITE": "Favorito",
+    "LOANED": "Prestado"
+  },
+  "binding": {
+    "CARTONE": "Cartoné",
+    "TAPA_BLANDA": "Tapa blanda",
+    "BOLSILLO": "Bolsillo",
+    "OMNIBUS": "Ómnibus",
+    "HARDCOVER": "Tapa dura"
   },
   "nav": {
     "dashboard": "Inicio",
@@ -28,6 +36,7 @@
     "search": "Buscar",
     "collections": "Colecciones",
     "settings": "Ajustes",
+    "discover": "Descubrir",
     "logout": "Cerrar sesión"
   },
   "auth": {
@@ -59,6 +68,8 @@
       "loginTagline": "De vuelta a las viñetas",
       "loginBody": "Inicia sesión y retoma tu colección donde la dejaste."
     },
+    "googleButton": "Continuar con Google",
+    "orContinueWith": "o",
     "validation": {
       "invalidEmail": "Email inválido",
       "passwordRequired": "La contraseña es requerida",
@@ -103,7 +114,33 @@
     "updateError": "No se pudo actualizar el estado",
     "prevPage": "Página anterior",
     "nextPage": "Página siguiente",
-    "pageOf": "{{page}} / {{total}}"
+    "pageOf": "{{page}} / {{total}}",
+    "sortBy": "Ordenar por",
+    "sortSeries": "Serie",
+    "sortTitle": "Título",
+    "sortYear": "Año",
+    "sortAdded": "Añadido",
+    "sortRating": "Puntuación",
+    "filterLoaned": "Prestados",
+    "loanedBadge": "Prestado",
+    "searchPlaceholder": "Buscar por título, serie o editorial...",
+    "noResultsSearch": "Sin resultados para \"{{q}}\"",
+    "clearSearch": "Limpiar",
+    "filterByTag": "Etiqueta",
+    "noSeries": "Sin serie",
+    "seriesCount": "{{count}} núm.",
+    "checkCompletion": "Ver qué falta",
+    "completionOwned": "{{owned}} de {{total}} números",
+    "completionFull": "¡Serie completa!",
+    "missingIssues": "Números que faltan",
+    "addToWishlist": "Añadir a lista de deseos",
+    "addedToWishlist": "Añadido a lista de deseos",
+    "advancedFilters": "Más filtros",
+    "filterPublisher": "Editorial",
+    "filterPublisherPlaceholder": "Ej. Dargaud, Glenat...",
+    "filterYearFrom": "Año desde",
+    "filterYearTo": "Año hasta",
+    "clearFilters": "Limpiar filtros"
   },
   "search": {
     "title": "Buscar cómics",
@@ -137,7 +174,9 @@
     "publisherPlaceholder": "Editorial",
     "coverUrlPlaceholder": "URL de portada (opcional)",
     "addToLibrary": "Añadir a biblioteca",
-    "pageOf": "Página {{page}} de {{total}}"
+    "pageOf": "Página {{page}} de {{total}}",
+    "seriesPlaceholder": "Serie",
+    "isbnPlaceholder": "ISBN"
   },
   "collections": {
     "title": "Colecciones",
@@ -213,6 +252,7 @@
     "dimensions": "Dimensiones",
     "paper": "Papel",
     "binding": "Encuadernación",
+    "drawingStyle": "Estilo de dibujo",
     "publishingFormat": "Formato publicación",
     "yearsActive": "Años activa",
     "web": "Web",
@@ -228,8 +268,19 @@
       "OWNED": "Tengo",
       "READ": "Leído",
       "WISHLIST": "Lo quiero",
-      "FAVORITE": "Favorito"
-    }
+      "FAVORITE": "Favorito",
+      "LOANED": "Prestado"
+    },
+    "loanedToPlaceholder": "Prestado a...",
+    "tagsLabel": "Etiquetas",
+    "addTag": "Añadir etiqueta...",
+    "editComic": "Editar cómic",
+    "editSaved": "Cambios guardados",
+    "coverUrlField": "URL de portada",
+    "whereToBuy": "Dónde comprar",
+    "copyIsbn": "Copiar ISBN",
+    "isbnCopied": "ISBN copiado",
+    "searchStore": "Buscar en tienda"
   },
   "gcdPanel": {
     "pages": "{{count}} páginas",
@@ -248,6 +299,7 @@
     "sections": {
       "account": "Cuenta",
       "appearance": "Apariencia",
+      "data": "Datos",
       "security": "Seguridad"
     },
     "account": {
@@ -274,6 +326,14 @@
       "themeSystem": "Sistema",
       "languageError": "No se pudo actualizar el idioma"
     },
+    "data": {
+      "title": "Datos",
+      "hint": "Exporta toda tu biblioteca para hacer una copia de seguridad.",
+      "exportCsv": "Exportar CSV",
+      "exportJson": "Exportar JSON",
+      "exporting": "Exportando...",
+      "exportError": "No se pudo exportar la biblioteca"
+    },
     "security": {
       "currentPasswordLabel": "Contraseña actual",
       "newPasswordLabel": "Nueva contraseña",
@@ -289,5 +349,20 @@
         "mustMatch": "Las contraseñas no coinciden"
       }
     }
+  },
+  "discover": {
+    "title": "Descubrir",
+    "subtitle": "Explora tus series e inspírate con recomendaciones personalizadas.",
+    "recommendSection": "Recomendaciones IA",
+    "recommendationsIntro": "Basado en tu colección, te sugerimos estos cómics.",
+    "getRecommendations": "Generar recomendaciones",
+    "loadingRecommendations": "Generando...",
+    "recommendWhy": "Por qué te puede gustar",
+    "noRecommendations": "Pulsa el botón para obtener recomendaciones personalizadas.",
+    "recommendError": "No se pudo generar recomendaciones. Inténtalo de nuevo.",
+    "seriesSection": "Tus series",
+    "seriesHint": "Series en tu colección, ordenadas por número de números.",
+    "noSeries": "No tienes series en tu biblioteca todavía.",
+    "owned": "{{count}} en colección"
   }
 }

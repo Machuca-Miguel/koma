@@ -20,7 +20,15 @@
     "OWNED": "In collection",
     "READ": "Read",
     "WISHLIST": "Wishlist",
-    "FAVORITE": "Favorite"
+    "FAVORITE": "Favorite",
+    "LOANED": "Loaned"
+  },
+  "binding": {
+    "CARTONE": "Hardcover",
+    "TAPA_BLANDA": "Softcover",
+    "BOLSILLO": "Pocket",
+    "OMNIBUS": "Omnibus",
+    "HARDCOVER": "Hardcover"
   },
   "nav": {
     "dashboard": "Home",
@@ -28,6 +36,7 @@
     "search": "Search",
     "collections": "Collections",
     "settings": "Settings",
+    "discover": "Discover",
     "logout": "Log out"
   },
   "auth": {
@@ -59,6 +68,8 @@
       "loginTagline": "Back to the panels",
       "loginBody": "Sign in and pick up your collection where you left off."
     },
+    "googleButton": "Continue with Google",
+    "orContinueWith": "or",
     "validation": {
       "invalidEmail": "Invalid email",
       "passwordRequired": "Password is required",
@@ -103,7 +114,33 @@
     "updateError": "Could not update status",
     "prevPage": "Previous page",
     "nextPage": "Next page",
-    "pageOf": "{{page}} / {{total}}"
+    "pageOf": "{{page}} / {{total}}",
+    "sortBy": "Sort by",
+    "sortSeries": "Series",
+    "sortTitle": "Title",
+    "sortYear": "Year",
+    "sortAdded": "Added",
+    "sortRating": "Rating",
+    "filterLoaned": "Loaned",
+    "loanedBadge": "Loaned",
+    "searchPlaceholder": "Search by title, series or publisher...",
+    "noResultsSearch": "No results for \"{{q}}\"",
+    "clearSearch": "Clear",
+    "filterByTag": "Tag",
+    "noSeries": "No series",
+    "seriesCount": "{{count}} iss.",
+    "checkCompletion": "Check what's missing",
+    "completionOwned": "{{owned}} of {{total}} issues",
+    "completionFull": "Complete series!",
+    "missingIssues": "Missing issues",
+    "addToWishlist": "Add to wishlist",
+    "addedToWishlist": "Added to wishlist",
+    "advancedFilters": "More filters",
+    "filterPublisher": "Publisher",
+    "filterPublisherPlaceholder": "e.g. Dargaud, Glenat...",
+    "filterYearFrom": "Year from",
+    "filterYearTo": "Year to",
+    "clearFilters": "Clear filters"
   },
   "search": {
     "title": "Search comics",
@@ -137,7 +174,9 @@
     "publisherPlaceholder": "Publisher",
     "coverUrlPlaceholder": "Cover URL (optional)",
     "addToLibrary": "Add to library",
-    "pageOf": "Page {{page}} of {{total}}"
+    "pageOf": "Page {{page}} of {{total}}",
+    "seriesPlaceholder": "Series",
+    "isbnPlaceholder": "ISBN"
   },
   "collections": {
     "title": "Collections",
@@ -213,6 +252,7 @@
     "dimensions": "Dimensions",
     "paper": "Paper",
     "binding": "Binding",
+    "drawingStyle": "Drawing style",
     "publishingFormat": "Publishing format",
     "yearsActive": "Years active",
     "web": "Web",
@@ -228,8 +268,19 @@
       "OWNED": "In collection",
       "READ": "Read",
       "WISHLIST": "Wishlist",
-      "FAVORITE": "Favorite"
-    }
+      "FAVORITE": "Favorite",
+      "LOANED": "Loaned"
+    },
+    "loanedToPlaceholder": "Loaned to...",
+    "tagsLabel": "Tags",
+    "addTag": "Add tag...",
+    "editComic": "Edit comic",
+    "editSaved": "Changes saved",
+    "coverUrlField": "Cover URL",
+    "whereToBuy": "Where to buy",
+    "copyIsbn": "Copy ISBN",
+    "isbnCopied": "ISBN copied",
+    "searchStore": "Search in store"
   },
   "gcdPanel": {
     "pages": "{{count}} pages",
@@ -248,6 +299,7 @@
     "sections": {
       "account": "Account",
       "appearance": "Appearance",
+      "data": "Data",
       "security": "Security"
     },
     "account": {
@@ -274,6 +326,14 @@
       "themeSystem": "System",
       "languageError": "Could not update language"
     },
+    "data": {
+      "title": "Data",
+      "hint": "Export your entire library to make a backup.",
+      "exportCsv": "Export CSV",
+      "exportJson": "Export JSON",
+      "exporting": "Exporting...",
+      "exportError": "Could not export library"
+    },
     "security": {
       "currentPasswordLabel": "Current password",
       "newPasswordLabel": "New password",
@@ -289,5 +349,20 @@
         "mustMatch": "Passwords do not match"
       }
     }
+  },
+  "discover": {
+    "title": "Discover",
+    "subtitle": "Explore your series and get inspired with personalised recommendations.",
+    "recommendSection": "AI Recommendations",
+    "recommendationsIntro": "Based on your collection, we suggest these comics.",
+    "getRecommendations": "Generate recommendations",
+    "loadingRecommendations": "Generating...",
+    "recommendWhy": "Why you might like it",
+    "noRecommendations": "Press the button to get personalised recommendations.",
+    "recommendError": "Could not generate recommendations. Please try again.",
+    "seriesSection": "Your series",
+    "seriesHint": "Series in your collection, sorted by number of issues.",
+    "noSeries": "You have no series in your library yet.",
+    "owned": "{{count}} in collection"
   }
 }

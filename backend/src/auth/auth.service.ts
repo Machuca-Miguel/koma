@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
+import type { Profile } from 'passport-google-oauth20';
 
 @Injectable()
 export class AuthService {
@@ -12,7 +13,7 @@ export class AuthService {
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
-    if (!user) return null;
+    if (!user || !user.passwordHash) return null;
 
     const isValid = await this.usersService.validatePassword(
       password,
@@ -34,6 +35,18 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
       user: { id: user.id, email: user.email, username: user.username, language: user.language },
     };
+  }
+
+  async validateGoogleUser(profile: Profile) {
+    const email = profile.emails?.[0]?.value ?? '';
+    const avatarUrl = profile.photos?.[0]?.value;
+    const user = await this.usersService.findOrCreateFromGoogle({
+      googleId: profile.id,
+      email,
+      displayName: profile.displayName,
+      avatarUrl,
+    });
+    return this.login(user);
   }
 
   async register(dto: RegisterDto) {

@@ -52,12 +52,56 @@ export class UsersService {
     return this.prisma.user.update({ where: { id: userId }, data: dto });
   }
 
+  async findOrCreateFromGoogle(data: {
+    googleId: string;
+    email: string;
+    displayName: string;
+    avatarUrl?: string;
+  }) {
+    const byGoogleId = await this.prisma.user.findUnique({
+      where: { googleId: data.googleId },
+    });
+    if (byGoogleId) return byGoogleId;
+
+    const byEmail = await this.prisma.user.findUnique({
+      where: { email: data.email },
+    });
+    if (byEmail) {
+      return this.prisma.user.update({
+        where: { id: byEmail.id },
+        data: { googleId: data.googleId, avatarUrl: data.avatarUrl },
+      });
+    }
+
+    // Generar username único a partir del email
+    const base = data.email
+      .split('@')[0]
+      .replace(/[^a-zA-Z0-9_]/g, '_')
+      .slice(0, 20);
+    const taken = await this.prisma.user.findUnique({ where: { username: base } });
+    const username = taken
+      ? `${base}_${Math.random().toString(36).slice(2, 6)}`
+      : base;
+
+    return this.prisma.user.create({
+      data: {
+        email: data.email,
+        username,
+        googleId: data.googleId,
+        avatarUrl: data.avatarUrl,
+      },
+    });
+  }
+
   async updatePassword(
     userId: string,
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Esta cuenta usa Google para autenticarse');
+    }
     const valid = await this.validatePassword(currentPassword, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Wrong current password');
     const hash = await bcrypt.hash(newPassword, 10);
