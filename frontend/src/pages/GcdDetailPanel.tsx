@@ -31,7 +31,7 @@ export function GcdDetailPanel({ externalId, isAdded, onClose, onAdded }: GcdDet
     mutationFn: async () => {
       const { comic: imported } = await gcdApi.import(externalId!)
       try {
-        await libraryApi.add({ comicId: imported.id, status: 'OWNED' })
+        await libraryApi.add({ comicId: imported.id, isOwned: true })
       } catch (err: unknown) {
         const status = (err as { response?: { status?: number } })?.response?.status
         if (status !== 409) throw err

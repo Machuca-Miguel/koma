@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
 import { useMutation } from '@tanstack/react-query'
@@ -7,6 +8,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import i18next from 'i18next'
 import { usersApi } from '@/api/users'
+import { libraryApi } from '@/api/library'
 import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { PageContainer } from '@/components/layout/PageContainer'
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -113,6 +116,28 @@ export function SettingsPage() {
     },
   })
 
+  // ── Export ────────────────────────────────────────────────────────────────
+
+  const [exporting, setExporting] = useState<'csv' | 'json' | null>(null)
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(format)
+    try {
+      const response = await libraryApi.export(format)
+      const blob = new Blob([response.data])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `koma-library.${format}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error(t('settings.data.exportError'))
+    } finally {
+      setExporting(null)
+    }
+  }
+
   const themeOptions: { value: string; label: string }[] = [
     { value: 'light', label: t('settings.appearance.themeLight') },
     { value: 'dark', label: t('settings.appearance.themeDark') },
@@ -120,7 +145,7 @@ export function SettingsPage() {
   ]
 
   return (
-    <div className="p-8 max-w-2xl">
+    <PageContainer size="xs">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">{t('settings.title')}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t('settings.subtitle')}</p>
@@ -155,7 +180,7 @@ export function SettingsPage() {
                   placeholder={t('settings.account.usernamePlaceholder')}
                   {...regUsername('username')}
                 />
-                <Button type="submit" size="sm" disabled={usernameMutation.isPending}>
+                <Button type="submit" disabled={usernameMutation.isPending}>
                   {usernameMutation.isPending ? t('common.saving') : t('settings.account.saveUsername')}
                 </Button>
               </div>
@@ -211,7 +236,42 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ── Section 3: Security ────────────────────────────────────────── */}
+        {/* ── Section 3: Data ───────────────────────────────────────────── */}
+        <Card>
+          <CardContent className="p-6 space-y-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('settings.sections.data')}
+            </h2>
+
+            <Separator />
+
+            <div className="space-y-1.5">
+              <p className="text-sm text-muted-foreground">{t('settings.data.hint')}</p>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={exporting !== null}
+                  onClick={() => handleExport('csv')}
+                >
+                  {exporting === 'csv' ? t('settings.data.exporting') : t('settings.data.exportCsv')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={exporting !== null}
+                  onClick={() => handleExport('json')}
+                >
+                  {exporting === 'json' ? t('settings.data.exporting') : t('settings.data.exportJson')}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Section 4: Security ────────────────────────────────────────── */}
         <Card>
           <CardContent className="p-6 space-y-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -257,6 +317,6 @@ export function SettingsPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageContainer>
   )
 }

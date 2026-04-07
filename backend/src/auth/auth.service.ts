@@ -21,11 +21,17 @@ export class AuthService {
     );
     if (!isValid) return null;
 
-    const { passwordHash: _, ...result } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { passwordHash, ...result } = user;
     return result;
   }
 
-  login(user: { id: string; email: string; username: string; language: string }) {
+  login(user: {
+    id: string;
+    email: string;
+    username: string;
+    language: string;
+  }) {
     const payload = {
       sub: user.id,
       email: user.email,
@@ -33,7 +39,12 @@ export class AuthService {
     };
     return {
       accessToken: this.jwtService.sign(payload),
-      user: { id: user.id, email: user.email, username: user.username, language: user.language },
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        language: user.language,
+      },
     };
   }
 
@@ -62,7 +73,12 @@ export class AuthService {
     };
     return {
       accessToken: this.jwtService.sign(payload),
-      user: { id: user.id, email: user.email, username: user.username, language: user.language },
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        language: user.language,
+      },
     };
   }
 }

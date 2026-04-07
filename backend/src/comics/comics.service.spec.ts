@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Test } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ComicsService } from './comics.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { AiService } from '../ai/ai.service';
+import type { CreateComicDto } from './dto/create-comic.dto';
+import type { UpdateComicDto } from './dto/update-comic.dto';
 
 const mockPrisma = {
   comic: {
@@ -13,16 +15,6 @@ const mockPrisma = {
     update: jest.fn(),
     delete: jest.fn(),
   },
-  tag: {
-    upsert: jest.fn(),
-  },
-  comicTag: {
-    upsert: jest.fn(),
-  },
-};
-
-const mockAiService = {
-  generateTags: jest.fn(),
 };
 
 const MOCK_COMIC = {
@@ -42,7 +34,6 @@ describe('ComicsService', () => {
       providers: [
         ComicsService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: AiService, useValue: mockAiService },
       ],
     }).compile();
 
@@ -68,7 +59,9 @@ describe('ComicsService', () => {
 
       await service.findAll({ search: 'batman', page: 1, limit: 20 });
 
-      const whereArg = mockPrisma.comic.findMany.mock.calls[0][0].where;
+      const whereArg = mockPrisma.comic.findMany.mock.calls[0][0].where as {
+        OR: { title: { contains: string } }[];
+      };
       expect(whereArg.OR).toBeDefined();
       expect(whereArg.OR[0].title.contains).toBe('batman');
     });
@@ -104,8 +97,11 @@ describe('ComicsService', () => {
     it('creates and returns comic', async () => {
       mockPrisma.comic.create.mockResolvedValue(MOCK_COMIC);
 
-      const dto = { title: 'Batman #1', publisher: 'DC Comics' };
-      const result = await service.create(dto as any);
+      const dto: CreateComicDto = {
+        title: 'Batman #1',
+        publisher: 'DC Comics',
+      };
+      const result = await service.create(dto);
 
       expect(mockPrisma.comic.create).toHaveBeenCalledWith({ data: dto });
       expect(result).toEqual(MOCK_COMIC);
@@ -118,16 +114,15 @@ describe('ComicsService', () => {
       const updated = { ...MOCK_COMIC, title: 'Batman #2' };
       mockPrisma.comic.update.mockResolvedValue(updated);
 
-      const result = await service.update('comic-1', {
-        title: 'Batman #2',
-      } as any);
+      const dto: UpdateComicDto = { title: 'Batman #2' };
+      const result = await service.update('comic-1', dto);
       expect(result.title).toBe('Batman #2');
     });
 
     it('throws NotFoundException for non-existent comic', async () => {
       mockPrisma.comic.findUnique.mockResolvedValue(null);
 
-      await expect(service.update('bad-id', {} as any)).rejects.toThrow(
+      await expect(service.update('bad-id', {})).rejects.toThrow(
         NotFoundException,
       );
       expect(mockPrisma.comic.update).not.toHaveBeenCalled();
@@ -150,28 +145,6 @@ describe('ComicsService', () => {
 
       await expect(service.remove('bad-id')).rejects.toThrow(NotFoundException);
       expect(mockPrisma.comic.delete).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('autoTag', () => {
-    it('generates and upserts tags', async () => {
-      mockPrisma.comic.findUnique.mockResolvedValue(MOCK_COMIC);
-      mockAiService.generateTags.mockResolvedValue([
-        { name: 'Superhero', slug: 'superhero' },
-        { name: 'Action', slug: 'action' },
-      ]);
-      mockPrisma.tag.upsert.mockResolvedValue({
-        id: 'tag-1',
-        name: 'Superhero',
-        slug: 'superhero',
-      });
-      mockPrisma.comicTag.upsert.mockResolvedValue({});
-
-      await service.autoTag('comic-1');
-
-      expect(mockAiService.generateTags).toHaveBeenCalledWith(MOCK_COMIC);
-      expect(mockPrisma.tag.upsert).toHaveBeenCalledTimes(2);
-      expect(mockPrisma.comicTag.upsert).toHaveBeenCalledTimes(2);
     });
   });
 });

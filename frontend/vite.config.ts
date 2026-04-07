@@ -12,6 +12,19 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts: ['professed-patly-dot.ngrok-free.dev'],
+    proxy: {
+      '/auth': { target: 'http://localhost:3000', changeOrigin: true },
+      '/my-library': { target: 'http://localhost:3000', changeOrigin: true },
+      '/comics': { target: 'http://localhost:3000', changeOrigin: true },
+      '/collections': { target: 'http://localhost:3000', changeOrigin: true },
+      '/users': { target: 'http://localhost:3000', changeOrigin: true },
+      '/gcd': { target: 'http://localhost:3000', changeOrigin: true },
+      '/series': { target: 'http://localhost:3000', changeOrigin: true },
+      '/ai': { target: 'http://localhost:3000', changeOrigin: true },
+      '/external-search': { target: 'http://localhost:3000', changeOrigin: true },
+      '/isbndb': { target: 'http://localhost:3000', changeOrigin: true },
+    },
   },
   test: {
     environment: 'jsdom',

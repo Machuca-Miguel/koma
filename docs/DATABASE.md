@@ -18,9 +18,32 @@ El proyecto usa **dos bases de datos independientes**:
 | `id` | String (cuid) | PK |
 | `email` | String unique | Email de acceso |
 | `username` | String unique | Nombre de usuario |
-| `password_hash` | String | Contraseña hasheada con bcrypt |
+| `password_hash` | String? | Contraseña hasheada con bcrypt (null si solo Google OAuth) |
+| `google_id` | String? unique | ID de Google OAuth |
+| `avatar_url` | String? | URL de avatar |
+| `language` | String | Idioma de interfaz (`"es"` por defecto) |
 | `created_at` | DateTime | Fecha de creación |
 | `updated_at` | DateTime | Última actualización |
+
+---
+
+### `series`
+
+Entidad propia para series de cómics. Agrupa issues y permite tracking de completitud.
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | String (cuid) | PK |
+| `name` | String | Nombre de la serie |
+| `publisher` | String? | Editorial |
+| `year_began` | Int? | Año de inicio |
+| `year_ended` | Int? | Año de fin (null si sigue activa) |
+| `total_issues` | Int? | Total de números en la serie (de GCD) |
+| `gcd_series_id` | Int? unique | ID de la serie en `gcd_series.id` (null si no viene de GCD) |
+| `cover_url` | String? | Portada representativa |
+| `is_ongoing` | Boolean | `true` si la serie sigue publicándose (default true) |
+| `created_at` | DateTime | — |
+| `updated_at` | DateTime | — |
 
 ---
 
@@ -29,28 +52,42 @@ El proyecto usa **dos bases de datos independientes**:
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | String (cuid) | PK |
-| `title` | String | Nombre de la serie |
-| `issue_number` | String? | Número del cómic |
+| `title` | String | Título del issue |
+| `issue_number` | String? | Número del issue |
 | `publisher` | String? | Editorial |
 | `year` | Int? | Año de publicación |
 | `synopsis` | Text? | Sinopsis |
 | `cover_url` | String? | URL de portada |
 | `external_id` | String? | ID externo (p.ej. `"gcd-123456"`) |
-| `external_api` | String? | Origen (`"gcd"` \| `"manual"`) |
+| `external_api` | String? | Origen (`"gcd"` \| `"google_books"` \| `"open_library"` \| ...) |
 | `metadata` | Json? | Datos adicionales de la fuente externa |
+| `isbn` | String? | ISBN |
+| `binding` | BindingFormat? | Encuadernación (enum) |
+| `drawing_style` | String? | Estilo de dibujo |
+| `series` | String? | Nombre de serie **denormalizado** (fallback si no hay FK) |
+| `series_id` | String? | FK → series (`onDelete: SetNull`) |
 | `created_at` | DateTime | — |
 | `updated_at` | DateTime | — |
+
+**Nota:** `series` (texto libre) se mantiene como fallback para cómics importados antes de la entidad `Series`. Para nuevos imports de GCD, se crea/enlaza automáticamente la entidad `Series` y se rellena `series_id`.
 
 ---
 
 ### `user_comics` *(tabla pivote Usuario ↔ Cómic)*
+
+Multi-status: un cómic puede tener varios estados activos a la vez.
 
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | String (cuid) | PK |
 | `user_id` | String | FK → users |
 | `comic_id` | String | FK → comics |
-| `status` | Enum | `OWNED` \| `READ` \| `WISHLIST` \| `FAVORITE` |
+| `is_owned` | Boolean | "Tengo" (default false) |
+| `is_read` | Boolean | "Leído" (default false) |
+| `is_wishlist` | Boolean | "Lista de deseos" (default false) |
+| `is_favorite` | Boolean | "Favorito" (default false) |
+| `is_loaned` | Boolean | "Prestado" (default false) |
+| `loaned_to` | String? | Nombre de la persona que lo tiene prestado |
 | `rating` | Int? | 1–5, null si no puntuado |
 | `notes` | Text? | Notas personales |
 | `added_at` | DateTime | Fecha de adición |

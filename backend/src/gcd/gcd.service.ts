@@ -6,6 +6,8 @@ import {
   GcdSearchResult,
   GcdSeriesInfo,
   GcdPublisherInfo,
+  GcdSeriesSummary,
+  GcdSeriesSearchResult,
 } from './gcd-comic.interface';
 
 // ─── MySQL Row Interfaces ─────────────────────────────────────────────────────
@@ -67,6 +69,13 @@ interface GcdPublisherRow {
   year_began: number | null;
   year_ended: number | null;
   url: string | null;
+}
+
+interface GcdSeriesIssueRow {
+  id: number;
+  number: string | null;
+  key_date: string | null;
+  title: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,8 +216,8 @@ export class GcdService {
         ),
 
         // 4. Series data
-        this.db.query<GcdSeriesRow>(
-          `SELECT s.name, s.format, s.year_began, s.year_ended, s.issue_count,
+        this.db.query<GcdSeriesRow & { series_id: number }>(
+          `SELECT s.id AS series_id, s.name, s.format, s.year_began, s.year_ended, s.issue_count,
                   s.publication_dates, s.color, s.dimensions, s.paper_stock,
                   s.binding, s.publishing_format
            FROM gcd_issue i
@@ -296,6 +305,9 @@ export class GcdService {
           publishingFormat: sr.publishing_format ?? undefined,
         }
       : undefined;
+    const gcdSeriesId: number | undefined = (
+      sr as (GcdSeriesRow & { series_id: number }) | undefined
+    )?.series_id;
 
     // Publisher data
     const pr = publisherRows[0];
@@ -319,6 +331,170 @@ export class GcdService {
       stories,
       seriesInfo,
       publisherInfo,
+      gcdSeriesId,
+    };
+  }
+
+  async getSeriesIssues(issueId: string): Promise<{
+    seriesId: number;
+    seriesName: string;
+    issues: {
+      gcdId: string;
+      issueNumber: string | null;
+      title: string | null;
+    }[];
+  } | null> {
+    if (!this.available) return null;
+    const id = issueId.startsWith('gcd-') ? issueId.slice(4) : issueId;
+
+    // Find the series_id for this issue
+    const seriesRows = await this.db.query<{
+      series_id: number;
+      series_name: string;
+    }>(
+      `SELECT i.series_id, s.name AS series_name
+       FROM gcd_issue i JOIN gcd_series s ON s.id = i.series_id
+       WHERE i.id = ? AND i.deleted = 0`,
+      [id],
+    );
+    if (!seriesRows.length) return null;
+
+    const { series_id, series_name } = seriesRows[0];
+
+    const issueRows = await this.db.query<GcdSeriesIssueRow>(
+      `SELECT i.id, i.number,
+              (SELECT s.title FROM gcd_story s WHERE s.issue_id = i.id AND s.deleted = 0 LIMIT 1) AS title,
+              i.key_date
+       FROM gcd_issue i
+       WHERE i.series_id = ? AND i.deleted = 0
+       ORDER BY i.key_date, CAST(i.number AS UNSIGNED), i.number
+       LIMIT 300`,
+      [series_id],
+    );
+
+    return {
+      seriesId: series_id,
+      seriesName: series_name,
+      issues: issueRows.map((r) => {
+        const yearStr = r.key_date?.slice(0, 4);
+        const year = yearStr ? parseInt(yearStr, 10) : null;
+        return {
+          gcdId: `gcd-${r.id}`,
+          issueNumber: r.number ?? null,
+          title: r.title?.trim() || null,
+          year: year && !isNaN(year) ? year : null,
+        };
+      }),
+    };
+  }
+
+  async searchSeries(
+    query: string,
+    page = 1,
+    filters: { publisher?: string; year?: number } = {},
+  ): Promise<GcdSeriesSearchResult> {
+    if (!this.available) return { data: [], total: 0, page };
+
+    const limit = 20;
+    const offset = (page - 1) * limit;
+    const params: (string | number)[] = [];
+    const where: string[] = ['s.deleted = 0', 'p.deleted = 0'];
+
+    if (query) {
+      where.push('s.name LIKE ?');
+      params.push(`%${query}%`);
+    }
+    if (filters.publisher) {
+      where.push('p.name LIKE ?');
+      params.push(`%${filters.publisher}%`);
+    }
+    if (filters.year) {
+      where.push('s.year_began = ?');
+      params.push(filters.year);
+    }
+
+    const whereClause = `WHERE ${where.join(' AND ')}`;
+
+    interface SeriesRow {
+      series_id: number;
+      name: string;
+      publisher_name: string | null;
+      year_began: number | null;
+      year_ended: number | null;
+      issue_count: number | null;
+    }
+
+    const rows = await this.db.query<SeriesRow>(
+      `SELECT s.id AS series_id, s.name, p.name AS publisher_name,
+              s.year_began, s.year_ended, s.issue_count
+       FROM gcd_series s
+       JOIN gcd_publisher p ON p.id = s.publisher_id
+       ${whereClause}
+       ORDER BY s.name
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset],
+    );
+
+    const countRows = await this.db.query<{ total: number }>(
+      `SELECT COUNT(*) AS total
+       FROM gcd_series s
+       JOIN gcd_publisher p ON p.id = s.publisher_id
+       ${whereClause}`,
+      params,
+    );
+
+    const data: GcdSeriesSummary[] = rows.map((row) => ({
+      seriesId: row.series_id,
+      name: row.name,
+      publisher: row.publisher_name ?? undefined,
+      yearBegan: row.year_began ?? undefined,
+      yearEnded: row.year_ended ?? undefined,
+      issueCount: row.issue_count ?? undefined,
+    }));
+
+    return { data, total: Number(countRows[0]?.total ?? 0), page };
+  }
+
+  async getSeriesIssuesBySeriesId(seriesId: number): Promise<{
+    seriesName: string;
+    issues: {
+      gcdId: string;
+      issueNumber: string | null;
+      title: string | null;
+      year: number | null;
+    }[];
+  } | null> {
+    if (!this.available) return null;
+
+    const seriesRows = await this.db.query<{ name: string }>(
+      `SELECT name FROM gcd_series WHERE id = ? AND deleted = 0`,
+      [seriesId],
+    );
+    if (!seriesRows.length) return null;
+
+    const issueRows = await this.db.query<GcdSeriesIssueRow>(
+      `SELECT i.id, i.number,
+              (SELECT s.title FROM gcd_story s WHERE s.issue_id = i.id AND s.deleted = 0 LIMIT 1) AS title,
+              i.key_date
+       FROM gcd_issue i
+       WHERE i.series_id = ? AND i.deleted = 0
+       ORDER BY i.key_date, CAST(i.number AS UNSIGNED), i.number
+       LIMIT 300`,
+      [seriesId],
+    );
+
+    return {
+      seriesName: seriesRows[0].name,
+      issues: issueRows.map((r) => {
+        const yearStr = r.key_date?.slice(0, 4);
+        const year = yearStr ? parseInt(yearStr, 10) : null;
+        return {
+          gcdId: `gcd-${r.id}`,
+          issueNumber: r.number ?? null,
+          title: r.title?.trim() || null,
+          year: year && !isNaN(year) ? year : null,
+        };
+      }),
     };
   }
 
@@ -336,6 +512,8 @@ export class GcdService {
       coverUrl: row.valid_isbn
         ? `https://covers.openlibrary.org/b/isbn/${row.valid_isbn}-M.jpg`
         : undefined,
+      isbn: row.valid_isbn ?? undefined,
+      series: row.series_name ?? undefined,
     };
   }
 }

@@ -6,6 +6,8 @@ export interface GcdComic {
   year?: number;
   synopsis?: string;
   coverUrl?: string; // Open Library si hay valid_isbn
+  isbn?: string;
+  series?: string;
 }
 
 export interface GcdSearchResult {
@@ -61,4 +63,21 @@ export interface GcdComicDetail extends GcdComic {
   stories: GcdStory[];
   seriesInfo?: GcdSeriesInfo;
   publisherInfo?: GcdPublisherInfo;
+  // GCD series ID (gcd_series.id) — for linking to Series entity on import
+  gcdSeriesId?: number;
+}
+
+export interface GcdSeriesSummary {
+  seriesId: number;
+  name: string;
+  publisher?: string;
+  yearBegan?: number;
+  yearEnded?: number;
+  issueCount?: number;
+}
+
+export interface GcdSeriesSearchResult {
+  data: GcdSeriesSummary[];
+  total: number;
+  page: number;
 }

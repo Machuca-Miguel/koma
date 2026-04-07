@@ -20,6 +20,8 @@ export interface Tag {
   slug: string
 }
 
+export type BindingFormat = 'CARTONE' | 'TAPA_BLANDA' | 'BOLSILLO' | 'OMNIBUS' | 'HARDCOVER'
+
 export interface Comic {
   id: string
   title: string
@@ -32,13 +34,39 @@ export interface Comic {
   externalApi?: string
   createdAt: string
   tags?: { tag: Tag }[]
+  // Campos de coleccionista
+  isbn?: string
+  binding?: BindingFormat
+  drawingStyle?: string
+  series?: string
+  seriesId?: string
+  authors?: string
 }
 
+// Status flags — un cómic puede tener varios a la vez
+export interface UserComicStatus {
+  isOwned: boolean
+  isRead: boolean
+  isWishlist: boolean
+  isFavorite: boolean
+  isLoaned: boolean
+  loanedTo?: string
+}
+
+export type LibraryFilter = 'OWNED' | 'READ' | 'WISHLIST' | 'FAVORITE' | 'LOANED' | 'ALL'
+export type SortBy = 'series_asc' | 'title_asc' | 'year_asc' | 'added_desc' | 'rating_desc'
+
+// Kept for badge display helpers
 export type CollectionStatus = 'OWNED' | 'READ' | 'WISHLIST' | 'FAVORITE'
 
 export interface UserComic {
   id: string
-  status: CollectionStatus
+  isOwned: boolean
+  isRead: boolean
+  isWishlist: boolean
+  isFavorite: boolean
+  isLoaned: boolean
+  loanedTo?: string
   rating?: number
   notes?: string
   addedAt: string
@@ -52,15 +80,35 @@ export interface Collection {
   name: string
   description?: string
   isPublic: boolean
+  rating?: number | null
   createdAt: string
   userId: string
+  yearRange?: { min: number; max: number } | null
+  previewCovers?: string[]
   _count?: { comics: number }
+}
+
+export interface CollectionComicUserStatus {
+  isOwned: boolean
+  isRead: boolean
+  isWishlist: boolean
+  isFavorite: boolean
+  isLoaned: boolean
+  rating?: number | null
 }
 
 export interface CollectionComic {
   collectionId: string
   comicId: string
   addedAt: string
+  position?: number | null
+  comic: Comic
+  userStatus?: CollectionComicUserStatus | null
+}
+
+export interface CollectionSuggestion {
+  comicId: string
+  score: number
   comic: Comic
 }
 
@@ -74,6 +122,8 @@ export interface GcdComic {
   year?: number
   synopsis?: string
   coverUrl?: string
+  isbn?: string
+  series?: string
 }
 
 export interface GcdSearchResult {
@@ -130,6 +180,52 @@ export interface GcdComicDetail extends GcdComic {
   seriesInfo?: GcdSeriesInfo
   publisherInfo?: GcdPublisherInfo
 }
+
+// ─── GCD Series ────────────────────────────────────────────────────────────
+
+export interface GcdSeriesSummary {
+  seriesId: number
+  name: string
+  publisher?: string
+  yearBegan?: number
+  yearEnded?: number
+  issueCount?: number
+}
+
+export interface GcdSeriesSearchResult {
+  data: GcdSeriesSummary[]
+  total: number
+  page: number
+}
+
+export interface GcdSeriesCompletion {
+  seriesName: string | null
+  total: number
+  owned: number
+  issues: Array<{
+    gcdId: string
+    issueNumber: string | null
+    title: string | null
+    year: number | null
+    isOwned: boolean
+  }>
+}
+
+// ─── Library Series View ───────────────────────────────────────────────────
+
+export interface UserSeriesSummary {
+  seriesId: string | null
+  gcdSeriesId: number | null
+  seriesName: string
+  publisher: string | null
+  coverUrl: string | null
+  totalCount: number | null
+  isOngoing: boolean | null
+  ownedCount: number
+  comicCount: number
+  comics: UserComic[]
+}
+
 
 // ─── Pagination ────────────────────────────────────────────────────────────
 

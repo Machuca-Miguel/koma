@@ -3,6 +3,9 @@ import {
   IsString,
   IsOptional,
   IsBoolean,
+  IsInt,
+  Min,
+  Max,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -26,4 +29,11 @@ export class CreateCollectionDto {
   @IsBoolean()
   @IsOptional()
   isPublic?: boolean;
+
+  @ApiPropertyOptional({ example: 4, description: 'Puntuación 1-5' })
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  @IsOptional()
+  rating?: number;
 }

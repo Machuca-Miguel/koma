@@ -28,6 +28,29 @@ model User {
   @@map("users")
 }
 
+// Serie como entidad propia — agrupa issues y permite tracking de completitud
+model Series {
+  id          String   @id @default(cuid())
+  name        String
+  publisher   String?
+  yearBegan   Int?     @map("year_began")
+  yearEnded   Int?     @map("year_ended")
+  totalIssues Int?     @map("total_issues")
+  // ID de la serie en GCD (gcd_series.id) — null si no viene de GCD
+  gcdSeriesId    Int?     @unique @map("gcd_series_id")
+  // URL de la colección en Tebeosfera — null si no viene de Tebeosfera
+  tebeosferaUrl  String?  @unique @map("tebeosfera_url")
+  // Portada representativa (la del primer issue importado, o manual)
+  coverUrl    String?  @map("cover_url")
+  isOngoing   Boolean  @default(true) @map("is_ongoing")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  comics      Comic[]
+
+  @@map("series")
+}
+
 model Comic {
   id           String         @id @default(cuid())
   title        String
@@ -38,14 +61,24 @@ model Comic {
   coverUrl     String?        @map("cover_url")
   // ID del cómic en la API externa (Comic Vine, Marvel, etc.)
   externalId   String?        @map("external_id")
-  externalApi  String?        @map("external_api") // "comic_vine" | "marvel"
+  externalApi  String?        @map("external_api") // "gcd" | "google_books" | "open_library" | "isbndb"
   // Metadatos variables de APIs externas guardados como JSON
   metadata     Json?
   // Campos de coleccionista
   isbn         String?
   binding      BindingFormat?
   drawingStyle String?        @map("drawing_style")
+  authors      String?
+  // Nombre de serie denormalizado (fallback para cómics sin FK a Series)
   series       String?
+  // Relación con entidad Series (nullable — cómics importados antes de la migración no la tienen)
+  seriesId     String?        @map("series_id")
+  seriesRef    Series?        @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  // Phantom: cómic creado desde Tebeosfera con datos mínimos, pendiente de enriquecer con ISBN
+  isPhantom    Boolean        @default(false) @map("is_phantom")
+  tebeosferaUrl String?       @map("tebeosfera_url") // URL del número en Tebeosfera
+  // Estado del lookup automático de serie en Tebeosfera: pending | found | not_found | error | null
+  tebeosferaStatus String?    @map("tebeosfera_status")
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
@@ -91,10 +124,11 @@ enum BindingFormat {
 
 // Colecciones temáticas creadas por el usuario (ej: "Mi colección de Batman")
 model Collection {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
-  description String? @db.Text
-  isPublic    Boolean @default(false) @map("is_public")
+  description String?  @db.Text
+  isPublic    Boolean  @default(false) @map("is_public")
+  rating      Int?     // 1-5 estrellas
   createdAt   DateTime @default(now()) @map("created_at")
 
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -111,6 +145,7 @@ model CollectionComic {
   comic        Comic      @relation(fields: [comicId], references: [id], onDelete: Cascade)
   comicId      String     @map("comic_id")
   addedAt      DateTime   @default(now()) @map("added_at")
+  position     Int?       // Orden manual del usuario dentro de la colección (1 = primero)
 
   @@id([collectionId, comicId])
   @@map("collection_comics")

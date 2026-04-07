@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { BookOpen, Folders, LayoutDashboard, Library, LogOut, Search, Settings } from 'lucide-react'
+import { BookOpen, Compass, Folders, LayoutDashboard, Library, LogOut, Search, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/contexts/AuthContext'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import type { LucideIcon } from 'lucide-react'
 
 export function DashboardLayout() {
@@ -23,7 +24,8 @@ export function DashboardLayout() {
     { to: '/library',     label: t('nav.library'),     Icon: Library         },
     { to: '/search',      label: t('nav.search'),      Icon: Search          },
     { to: '/collections', label: t('nav.collections'), Icon: Folders         },
-    { to: '/settings',    label: t('nav.settings'),    Icon: Settings        },
+    { to: '/discover',    label: t('nav.discover'),    Icon: Compass   },
+    { to: '/settings',    label: t('nav.settings'),    Icon: Settings  },
   ]
 
   const handleLogout = () => {
@@ -96,6 +98,9 @@ export function DashboardLayout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
+        <div className="px-8 pt-5 pb-0">
+          <Breadcrumbs />
+        </div>
         <Outlet />
       </main>
     </div>

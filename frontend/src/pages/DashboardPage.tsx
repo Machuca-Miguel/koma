@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageContainer } from '@/components/layout/PageContainer'
 import type { CollectionStatus } from '@/types'
 
 const STATUS_META: Record<
@@ -36,10 +37,10 @@ export function DashboardPage() {
     queryFn: libraryApi.getStats,
   })
 
-  const total = Object.values(stats?.byStatus ?? {}).reduce((a, b) => a + b, 0)
+  const total = stats?.total ?? 0
 
   return (
-    <div className="p-8 max-w-4xl">
+    <PageContainer size="narrow">
       {/* Header */}
       <div className="mb-8">
         <p className="text-sm text-muted-foreground mb-0.5">{t(getGreetingKey())},</p>
@@ -146,28 +147,28 @@ export function DashboardPage() {
               {t('dashboard.quickLinks')}
             </p>
             <div className="flex flex-col gap-2">
-              <Button asChild variant="outline" className="w-full justify-between">
-                <Link to="/library">
+              <Button asChild variant="outline" className="w-full">
+                <Link to="/library" className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
                     <Library className="size-4" />
                     {t('dashboard.goToLibrary')}
                   </span>
-                  <ArrowRight className="size-3.5 text-muted-foreground" />
+                  <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="w-full justify-between">
-                <Link to="/search">
+              <Button asChild variant="outline" className="w-full">
+                <Link to="/search" className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
                     <Search className="size-4" />
                     {t('dashboard.searchComics')}
                   </span>
-                  <ArrowRight className="size-3.5 text-muted-foreground" />
+                  <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
                 </Link>
               </Button>
             </div>
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageContainer>
   )
 }

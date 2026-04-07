@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test } from '@nestjs/testing';
 import {
   NotFoundException,
@@ -183,7 +184,7 @@ describe('CollectionsService', () => {
         comicId: 'comic-1',
       });
 
-      const result = await service.addComic('col-1', 'user-1', 'comic-1');
+      await service.addComic('col-1', 'user-1', 'comic-1');
       expect(mockPrisma.collectionComic.create).toHaveBeenCalled();
     });
 

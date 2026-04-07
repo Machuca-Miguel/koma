@@ -6,9 +6,12 @@ import {
   Delete,
   Body,
   Param,
+  Query,
+  Res,
   UseGuards,
   Request,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CollectionsService } from './collections.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
@@ -37,7 +40,10 @@ export class CollectionsController {
 
   @Post()
   @ApiOperation({ summary: 'Crear una colección' })
-  create(@Request() req: AuthenticatedRequest, @Body() dto: CreateCollectionDto) {
+  create(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: CreateCollectionDto,
+  ) {
     return this.collectionsService.create(req.user.id, dto);
   }
 
@@ -81,5 +87,39 @@ export class CollectionsController {
     @Param('comicId') comicId: string,
   ) {
     return this.collectionsService.removeComic(id, req.user.id, comicId);
+  }
+
+  @Patch(':id/comics/reorder')
+  @ApiOperation({ summary: 'Reordenar cómics de una colección' })
+  reorderComics(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: { items: { comicId: string; position: number }[] },
+  ) {
+    return this.collectionsService.reorderComics(id, req.user.id, body.items);
+  }
+
+  @Get(':id/suggestions')
+  @ApiOperation({ summary: 'Sugerencias de cómics de la biblioteca para esta colección' })
+  getSuggestions(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.collectionsService.getSuggestions(id, req.user.id);
+  }
+
+  @Get(':id/export')
+  @ApiOperation({ summary: 'Exportar cómics de una colección a CSV o JSON' })
+  async exportCollection(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query('format') format: 'csv' | 'json' = 'json',
+    @Res() res: Response,
+  ) {
+    const data = await this.collectionsService.exportCollection(id, req.user.id, format);
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="collection-${id}.csv"`);
+      res.send(data);
+    } else {
+      res.json(data);
+    }
   }
 }

@@ -62,10 +62,7 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Callback de Google OAuth' })
-  googleCallback(
-    @Request() req: AuthenticatedRequest,
-    @Res() res: Response,
-  ) {
+  googleCallback(@Request() req: AuthenticatedRequest, @Res() res: Response) {
     const { accessToken, user } = req.user as unknown as {
       accessToken: string;
       user: { id: string; email: string; username: string; language: string };
@@ -73,6 +70,8 @@ export class AuthController {
     const encoded = Buffer.from(JSON.stringify(user)).toString('base64');
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&u=${encoded}`);
+    res.redirect(
+      `${frontendUrl}/auth/callback?token=${accessToken}&u=${encoded}`,
+    );
   }
 }

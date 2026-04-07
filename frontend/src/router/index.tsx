@@ -7,6 +7,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { SearchPage } from '@/pages/SearchPage'
 import { CollectionsPage } from '@/pages/CollectionsPage'
+import { CollectionDetailPage } from '@/pages/CollectionDetailPage'
 import { ComicDetailPage } from '@/pages/ComicDetailPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
@@ -37,6 +38,7 @@ export function AppRouter() {
           <Route path="library" element={<LibraryPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="collections" element={<CollectionsPage />} />
+          <Route path="collections/:id" element={<CollectionDetailPage />} />
           <Route path="comics/:id" element={<ComicDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="discover" element={<DiscoverPage />} />

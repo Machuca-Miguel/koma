@@ -1,7 +1,7 @@
 import { api } from './client'
 import type { AuthResponse } from '@/types'
 
-export const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL ?? 'http://localhost:3000'}/auth/google`
+export const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL ?? ''}/auth/google`
 
 export const authApi = {
   register: (data: { email: string; username: string; password: string }) =>

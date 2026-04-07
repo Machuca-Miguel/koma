@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
@@ -78,7 +82,9 @@ export class UsersService {
       .split('@')[0]
       .replace(/[^a-zA-Z0-9_]/g, '_')
       .slice(0, 20);
-    const taken = await this.prisma.user.findUnique({ where: { username: base } });
+    const taken = await this.prisma.user.findUnique({
+      where: { username: base },
+    });
     const username = taken
       ? `${base}_${Math.random().toString(36).slice(2, 6)}`
       : base;
@@ -98,13 +104,23 @@ export class UsersService {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
     if (!user.passwordHash) {
-      throw new UnauthorizedException('Esta cuenta usa Google para autenticarse');
+      throw new UnauthorizedException(
+        'Esta cuenta usa Google para autenticarse',
+      );
     }
-    const valid = await this.validatePassword(currentPassword, user.passwordHash);
+    const valid = await this.validatePassword(
+      currentPassword,
+      user.passwordHash,
+    );
     if (!valid) throw new UnauthorizedException('Wrong current password');
     const hash = await bcrypt.hash(newPassword, 10);
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: hash },
+    });
   }
 }

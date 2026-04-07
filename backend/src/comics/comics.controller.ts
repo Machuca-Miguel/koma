@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ComicsService } from './comics.service';
@@ -15,6 +16,7 @@ import { CreateComicDto } from './dto/create-comic.dto';
 import { UpdateComicDto } from './dto/update-comic.dto';
 import { QueryComicDto } from './dto/query-comic.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../auth/authenticated-request.interface';
 
 @ApiTags('comics')
 @ApiBearerAuth()
@@ -29,10 +31,28 @@ export class ComicsController {
     return this.comicsService.findAll(query);
   }
 
+  @Get('tags/user')
+  @ApiOperation({ summary: 'Obtener todos los tags del usuario' })
+  getTagsByUser(@Request() req: AuthenticatedRequest) {
+    return this.comicsService.getTagsByUser(req.user.id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un cómic por ID' })
   findOne(@Param('id') id: string) {
     return this.comicsService.findOne(id);
+  }
+
+  @Post(':id/tags')
+  @ApiOperation({ summary: 'Añadir tag a un cómic' })
+  addTag(@Param('id') id: string, @Body() body: { name: string }) {
+    return this.comicsService.addTag(id, body.name);
+  }
+
+  @Delete(':id/tags/:tagId')
+  @ApiOperation({ summary: 'Eliminar tag de un cómic' })
+  removeTag(@Param('id') id: string, @Param('tagId') tagId: string) {
+    return this.comicsService.removeTag(id, tagId);
   }
 
   @Post()

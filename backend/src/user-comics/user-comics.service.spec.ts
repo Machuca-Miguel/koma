@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { Test } from '@nestjs/testing';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { UserComicsService } from './user-comics.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { IsbndbService } from '../isbndb/isbndb.service';
 
 const mockPrisma = {
   userComic: {
@@ -16,15 +18,27 @@ const mockPrisma = {
   },
   comic: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
   },
 };
+
+const mockIsbndb = {
+  getBook: jest.fn(),
+};
+
 
 const MOCK_COMIC = { id: 'comic-1', title: 'Batman #1' };
 const MOCK_USER_COMIC = {
   id: 'uc-1',
   userId: 'user-1',
   comicId: 'comic-1',
-  status: 'OWNED',
+  isOwned: true,
+  isRead: false,
+  isWishlist: false,
+  isFavorite: false,
+  isLoaned: false,
+  loanedTo: null,
   rating: 8,
   notes: 'Great issue',
   addedAt: new Date(),
@@ -39,6 +53,7 @@ describe('UserComicsService', () => {
       providers: [
         UserComicsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: IsbndbService, useValue: mockIsbndb },
       ],
     }).compile();
 
@@ -58,14 +73,14 @@ describe('UserComicsService', () => {
       expect(result.totalPages).toBe(1);
     });
 
-    it('filters by status', async () => {
+    it('filters by OWNED status flag', async () => {
       mockPrisma.userComic.findMany.mockResolvedValue([]);
       mockPrisma.userComic.count.mockResolvedValue(0);
 
-      await service.findAll('user-1', { status: 'OWNED' as any });
+      await service.findAll('user-1', { status: 'OWNED' });
 
       const whereArg = mockPrisma.userComic.findMany.mock.calls[0][0].where;
-      expect(whereArg.status).toBe('OWNED');
+      expect(whereArg.isOwned).toBe(true);
     });
 
     it('applies correct skip for page 3', async () => {
@@ -75,6 +90,18 @@ describe('UserComicsService', () => {
       await service.findAll('user-1', { page: 3, limit: 10 });
 
       expect(mockPrisma.userComic.findMany.mock.calls[0][0].skip).toBe(20);
+    });
+
+    it('applies search filter on title, series and publisher', async () => {
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
+      mockPrisma.userComic.count.mockResolvedValue(0);
+
+      await service.findAll('user-1', { q: 'asterix' });
+
+      const whereArg = mockPrisma.userComic.findMany.mock.calls[0][0].where;
+      expect(whereArg.comic).toBeDefined();
+      expect(whereArg.comic.OR).toBeDefined();
+      expect(whereArg.comic.OR[0].title.contains).toBe('asterix');
     });
   });
 
@@ -86,7 +113,7 @@ describe('UserComicsService', () => {
 
       const result = await service.add('user-1', {
         comicId: 'comic-1',
-        status: 'OWNED' as any,
+        isOwned: true,
       });
       expect(result).toEqual(MOCK_USER_COMIC);
     });
@@ -95,7 +122,7 @@ describe('UserComicsService', () => {
       mockPrisma.comic.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.add('user-1', { comicId: 'bad-id', status: 'OWNED' as any }),
+        service.add('user-1', { comicId: 'bad-id', isOwned: true }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -104,7 +131,54 @@ describe('UserComicsService', () => {
       mockPrisma.userComic.findUnique.mockResolvedValue(MOCK_USER_COMIC);
 
       await expect(
-        service.add('user-1', { comicId: 'comic-1', status: 'OWNED' as any }),
+        service.add('user-1', { comicId: 'comic-1', isOwned: true }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('addByIsbn', () => {
+    const MOCK_ISBNDB_BOOK = {
+      isbn: '9788467400123',
+      isbn13: '9788467400123',
+      title: 'Astérix el Galo',
+      publisher: 'Salvat',
+      date_published: '1999',
+      image: 'https://example.com/cover.jpg',
+    };
+
+    it('creates comic from ISBN and adds to library', async () => {
+      mockIsbndb.getBook.mockResolvedValue(MOCK_ISBNDB_BOOK);
+      mockPrisma.comic.findFirst.mockResolvedValue(null);
+      mockPrisma.comic.create.mockResolvedValue(MOCK_COMIC);
+      mockPrisma.userComic.findUnique.mockResolvedValue(null);
+      mockPrisma.userComic.create.mockResolvedValue(MOCK_USER_COMIC);
+
+      const result = await service.addByIsbn('user-1', '9788467400123');
+
+      expect(mockIsbndb.getBook).toHaveBeenCalledWith('9788467400123');
+      expect(mockPrisma.comic.create).toHaveBeenCalled();
+      expect(result).toEqual(MOCK_USER_COMIC);
+    });
+
+    it('reuses existing comic if already imported', async () => {
+      mockIsbndb.getBook.mockResolvedValue(MOCK_ISBNDB_BOOK);
+      mockPrisma.comic.findFirst.mockResolvedValue(MOCK_COMIC);
+      mockPrisma.userComic.findUnique.mockResolvedValue(null);
+      mockPrisma.userComic.create.mockResolvedValue(MOCK_USER_COMIC);
+
+      await service.addByIsbn('user-1', '9788467400123');
+
+      expect(mockPrisma.comic.create).not.toHaveBeenCalled();
+      expect(mockPrisma.userComic.create).toHaveBeenCalled();
+    });
+
+    it('throws ConflictException if comic already in library', async () => {
+      mockIsbndb.getBook.mockResolvedValue(MOCK_ISBNDB_BOOK);
+      mockPrisma.comic.findFirst.mockResolvedValue(MOCK_COMIC);
+      mockPrisma.userComic.findUnique.mockResolvedValue(MOCK_USER_COMIC);
+
+      await expect(
+        service.addByIsbn('user-1', '9788467400123'),
       ).rejects.toThrow(ConflictException);
     });
   });
@@ -151,11 +225,14 @@ describe('UserComicsService', () => {
   });
 
   describe('getStats', () => {
-    it('returns stats by status and average rating', async () => {
-      mockPrisma.userComic.groupBy.mockResolvedValue([
-        { status: 'OWNED', _count: { status: 10 } },
-        { status: 'READ', _count: { status: 5 } },
-      ]);
+    it('returns stats with individual flag counts and average rating', async () => {
+      mockPrisma.userComic.count
+        .mockResolvedValueOnce(15) // total
+        .mockResolvedValueOnce(10) // owned
+        .mockResolvedValueOnce(5) // read
+        .mockResolvedValueOnce(3) // wishlist
+        .mockResolvedValueOnce(2) // favorite
+        .mockResolvedValueOnce(1); // loaned
       mockPrisma.userComic.aggregate.mockResolvedValue({
         _avg: { rating: 8.4 },
         _count: { rating: 7 },
@@ -163,14 +240,16 @@ describe('UserComicsService', () => {
 
       const result = await service.getStats('user-1');
 
+      expect(result.total).toBe(15);
       expect(result.byStatus['OWNED']).toBe(10);
       expect(result.byStatus['READ']).toBe(5);
+      expect(result.loaned).toBe(1);
       expect(result.totalRated).toBe(7);
       expect(result.averageRating).toBe(8.4);
     });
 
     it('returns null averageRating when no rated comics', async () => {
-      mockPrisma.userComic.groupBy.mockResolvedValue([]);
+      mockPrisma.userComic.count.mockResolvedValue(0);
       mockPrisma.userComic.aggregate.mockResolvedValue({
         _avg: { rating: null },
         _count: { rating: 0 },

@@ -9,6 +9,9 @@ import { ComicsModule } from './comics/comics.module';
 import { UserComicsModule } from './user-comics/user-comics.module';
 import { CollectionsModule } from './collections/collections.module';
 import { GcdModule } from './gcd/gcd.module';
+import { SeriesModule } from './series/series.module';
+import { AiModule } from './ai/ai.module';
+import { IsbndbModule } from './isbndb/isbndb.module';
 
 @Module({
   imports: [
@@ -20,6 +23,9 @@ import { GcdModule } from './gcd/gcd.module';
     UserComicsModule,
     CollectionsModule,
     GcdModule,
+    SeriesModule,
+    AiModule,
+    IsbndbModule,
   ],
   controllers: [AppController],
   providers: [AppService],

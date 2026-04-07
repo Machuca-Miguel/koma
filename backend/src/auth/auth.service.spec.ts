@@ -74,13 +74,14 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('returns accessToken and user info', async () => {
+    it('returns accessToken and user info', () => {
       const user = {
         id: MOCK_USER.id,
         email: MOCK_USER.email,
         username: MOCK_USER.username,
+        language: 'es',
       };
-      const result = await service.login(user);
+      const result = service.login(user);
 
       expect(result.accessToken).toBe('mock-jwt-token');
       expect(result.user).toEqual(user);

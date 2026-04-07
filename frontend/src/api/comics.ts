@@ -1,5 +1,11 @@
 import { api } from './client'
-import type { Comic } from '@/types'
+import type { Comic, BindingFormat } from '@/types'
+
+export interface ComicTag {
+  id: string
+  name: string
+  slug: string
+}
 
 export const comicsApi = {
   getOne: (comicId: string) =>
@@ -12,5 +18,31 @@ export const comicsApi = {
     year?: number
     synopsis?: string
     coverUrl?: string
+    isbn?: string
+    binding?: BindingFormat
+    drawingStyle?: string
+    series?: string
   }) => api.post<Comic>('/comics', data).then((r) => r.data),
+
+  update: (comicId: string, data: {
+    title?: string
+    publisher?: string
+    year?: number
+    synopsis?: string
+    coverUrl?: string
+    isbn?: string
+    binding?: BindingFormat | null
+    drawingStyle?: string
+    series?: string
+    authors?: string
+  }) => api.patch<Comic>(`/comics/${comicId}`, data).then((r) => r.data),
+
+  getTags: () =>
+    api.get<ComicTag[]>('/comics/tags/user').then((r) => r.data),
+
+  addTag: (comicId: string, name: string) =>
+    api.post<Comic>(`/comics/${comicId}/tags`, { name }).then((r) => r.data),
+
+  removeTag: (comicId: string, tagId: string) =>
+    api.delete<Comic>(`/comics/${comicId}/tags/${tagId}`).then((r) => r.data),
 }
