@@ -623,13 +623,14 @@ function TabBooks({ source, addedIds, onAdd, isPending, addedGcdIds, onAddGcd, i
   const [publisherFilter, setPublisherFilter] = useState('')
   const [publisherChips, setPublisherChips] = useState<Set<string>>(new Set())
   const [groupBy, setGroupBy] = useState<GroupBy>('none')
+  const [comicsOnly, setComicsOnly] = useState(true)
   // GCD-specific filters
   const [gcdPublisher, setGcdPublisher] = useState('')
   const [gcdYear, setGcdYear] = useState('')
   // Series sheet (GCD)
   const [selectedSeries, setSelectedSeries] = useState<{ gcdSeriesId: number; name: string } | null>(null)
 
-  const activeIsbndbFilterCount = [language, yearFrom, yearTo, publisherFilter].filter(Boolean).length + publisherChips.size
+  const activeIsbndbFilterCount = [language, yearFrom, yearTo, publisherFilter].filter(Boolean).length + publisherChips.size + (comicsOnly ? 1 : 0)
 
   const isbndbQuery = useQuery({
     queryKey: ['isbndb', 'books', submitted, page, language],
@@ -648,8 +649,18 @@ function TabBooks({ source, addedIds, onAdd, isPending, addedGcdIds, onAddGcd, i
     enabled: source === 'gcd' && (submitted.trim().length > 0 || !!gcdPublisher),
   })
 
+  const COMIC_SUBJECT_KEYWORDS = ['comic', 'graphic novel', 'manga', 'bande dessin', 'fumetti', 'bd ', 'tebeo', 'strip', 'illustrat']
+
   const books = useMemo(() => {
     let raw = isbndbQuery.data?.books ?? []
+    if (comicsOnly) {
+      raw = raw.filter((book) => {
+        if (!book.subjects || book.subjects.length === 0) return true // sin subjects, no se filtra
+        return book.subjects.some((s) =>
+          COMIC_SUBJECT_KEYWORDS.some((k) => s.toLowerCase().includes(k))
+        )
+      })
+    }
     if (yearFrom || yearTo) {
       const from = yearFrom ? parseInt(yearFrom) : -Infinity
       const to = yearTo ? parseInt(yearTo) : Infinity
@@ -684,7 +695,7 @@ function TabBooks({ source, addedIds, onAdd, isPending, addedGcdIds, onAddGcd, i
   }
 
   function clearFilters() {
-    if (source === 'isbndb') { setLanguage(''); setYearFrom(''); setYearTo(''); setPublisherFilter(''); setPublisherChips(new Set()); setGroupBy('none') }
+    if (source === 'isbndb') { setLanguage(''); setYearFrom(''); setYearTo(''); setPublisherFilter(''); setPublisherChips(new Set()); setGroupBy('none'); setComicsOnly(false) }
     else { setGcdPublisher(''); setGcdYear('') }
   }
 
@@ -737,6 +748,21 @@ function TabBooks({ source, addedIds, onAdd, isPending, addedGcdIds, onAddGcd, i
         <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
           {source === 'isbndb' ? (
             <div className="space-y-3">
+              {/* Comics-only toggle */}
+              <button
+                type="button"
+                onClick={() => setComicsOnly((v) => !v)}
+                className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                  comicsOnly
+                    ? 'bg-primary/10 border-primary/40 text-primary font-medium'
+                    : 'border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className={`size-3.5 rounded-sm border flex items-center justify-center transition-colors ${comicsOnly ? 'bg-primary border-primary' : 'border-muted-foreground/50'}`}>
+                  {comicsOnly && <Check className="size-2.5 text-primary-foreground" />}
+                </div>
+                {t('isbndb.comicsOnly')}
+              </button>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">{t('isbndb.filterLanguage')}</label>

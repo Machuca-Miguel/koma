@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import {
   BookMarked, BookOpen, Bookmark, Star, Trash2, ChevronLeft, ChevronRight,
   Check, Search, X, Tag, SlidersHorizontal, CheckSquare, Folders, PenLine,
+  LayoutGrid, Layers,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -22,7 +23,7 @@ import { cn } from '@/lib/utils'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { AddToCollectionDialog } from '@/components/features/AddToCollectionDialog'
 import { CreateManualComicSheet } from './SearchPage'
-import type { LibraryFilter, SortBy, UserComic } from '@/types'
+import type { LibraryFilter, SortBy, UserComic, UserSeriesSummary } from '@/types'
 
 const STATUS_FLAGS: { key: keyof Pick<UserComic, 'isOwned' | 'isRead' | 'isWishlist' | 'isFavorite' | 'isLoaned'>; className: string; i18nKey: 'status.OWNED' | 'status.READ' | 'status.WISHLIST' | 'status.FAVORITE' | 'status.LOANED' }[] = [
   { key: 'isOwned',    className: 'bg-secondary/80 text-primary',                              i18nKey: 'status.OWNED'    },
@@ -48,8 +49,8 @@ function ComicCard({
   const { comic } = entry
   const activeStatusFlags = STATUS_FLAGS.filter((f) => entry[f.key])
   return (
-    <Card className="overflow-hidden group">
-      <Link to={`/comics/${comic.id}`} className="relative block w-full aspect-[2/3] bg-muted overflow-hidden">
+    <Card className="overflow-hidden group h-full flex flex-col">
+      <Link to={`/comics/${comic.id}`} className="relative block w-full aspect-[2/3] bg-muted overflow-hidden shrink-0">
         {comic.coverUrl ? (
           <img
             src={comic.coverUrl} alt={comic.title} loading="lazy"
@@ -70,8 +71,8 @@ function ComicCard({
           </div>
         )}
       </Link>
-      <CardContent className="p-3 space-y-1.5">
-        <div>
+      <CardContent className="px-3 flex flex-col flex-1">
+        <div className="flex-1 space-y-0.5 min-h-[80px]">
           <p className="text-sm font-medium leading-tight line-clamp-2">{comic.title}</p>
           {comic.series && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate italic">{comic.series}</p>
@@ -89,7 +90,7 @@ function ComicCard({
           )}
         </div>
         {comic.tags && comic.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 mt-1.5">
             {comic.tags.map(({ tag }) => (
               <span key={tag.id} className="text-xs px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
                 {tag.name}
@@ -97,7 +98,7 @@ function ComicCard({
             ))}
           </div>
         )}
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end mt-1">
           {confirmDeleteId === comic.id ? (
             <Button variant="ghost" size="icon" className="size-8 shrink-0 text-destructive hover:text-destructive"
               aria-label={t('common.confirm')}
@@ -118,6 +119,139 @@ function ComicCard({
   )
 }
 
+// ─── Series Group View ────────────────────────────────────────────────────────
+
+function SeriesGroupView({ filter, q }: { filter: LibraryFilter; q: string }) {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+
+  const { data: groups = [], isLoading } = useQuery({
+    queryKey: ['library-series-view', filter, q],
+    queryFn: () => libraryApi.getSeriesView({
+      status: filter !== 'ALL' ? filter : undefined,
+      q: q || undefined,
+    }),
+  })
+
+  const createCollectionMutation = useMutation({
+    mutationFn: async (group: UserSeriesSummary) => {
+      const collection = await collectionsApi.create({
+        name: group.seriesName,
+        description: group.publisher ?? undefined,
+      })
+      await Promise.all(group.comics.map((uc) => collectionsApi.addComic(collection.id, uc.comic.id)))
+      return collection
+    },
+    onSuccess: (col) => {
+      qc.invalidateQueries({ queryKey: ['collections'] })
+      toast.success(t('library.seriesCollectionCreated', { name: col.name }))
+    },
+    onError: () => toast.error(t('common.error')),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 w-full rounded-xl" />
+        ))}
+      </div>
+    )
+  }
+
+  if (groups.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon"><Layers className="size-8 text-muted-foreground" /></div>
+        <p className="font-medium">{t('library.noSeries')}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group) => {
+        const progress = group.totalCount ? Math.round((group.ownedCount / group.totalCount) * 100) : null
+        return (
+          <Card key={group.seriesId ?? group.seriesName} className="overflow-hidden">
+            <CardContent className="p-0">
+              <div className="flex gap-4 p-4">
+                {/* Cover */}
+                <div className="shrink-0 w-16 h-[88px] rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+                  {group.coverUrl
+                    ? <img src={group.coverUrl} alt={group.seriesName} loading="lazy" className="w-full h-full object-cover" />
+                    : <Layers className="size-6 text-muted-foreground/30" />}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0 flex flex-col gap-1 justify-center">
+                  <p className="font-semibold text-sm leading-tight truncate">{group.seriesName}</p>
+                  {group.publisher && (
+                    <p className="text-xs text-muted-foreground truncate">{group.publisher}</p>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground">
+                      {group.ownedCount} {group.totalCount ? `/ ${group.totalCount}` : ''} {t('library.issues')}
+                    </span>
+                    {group.isOngoing && (
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">{t('library.ongoing')}</Badge>
+                    )}
+                  </div>
+                  {progress !== null && (
+                    <div className="w-full bg-muted rounded-full h-1.5 mt-0.5">
+                      <div
+                        className="bg-primary h-1.5 rounded-full transition-all"
+                        style={{ width: `${Math.min(progress, 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="shrink-0 flex flex-col items-end gap-2 justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5 whitespace-nowrap"
+                    disabled={createCollectionMutation.isPending}
+                    onClick={() => createCollectionMutation.mutate(group)}
+                  >
+                    <Folders className="size-3.5" />
+                    {t('library.createCollection')}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Issue covers strip */}
+              {group.comics.length > 0 && (
+                <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto">
+                  {group.comics.slice(0, 12).map((uc) => (
+                    <Link
+                      key={uc.id}
+                      to={`/comics/${uc.comic.id}`}
+                      className="shrink-0 w-10 h-14 rounded overflow-hidden bg-muted flex items-center justify-center hover:opacity-80 transition-opacity"
+                      title={uc.comic.title}
+                    >
+                      {uc.comic.coverUrl
+                        ? <img src={uc.comic.coverUrl} alt={uc.comic.title} loading="lazy" className="w-full h-full object-cover" />
+                        : <BookOpen className="size-3 text-muted-foreground/30" />}
+                    </Link>
+                  ))}
+                  {group.comics.length > 12 && (
+                    <div className="shrink-0 w-10 h-14 rounded bg-muted flex items-center justify-center text-[10px] text-muted-foreground font-medium">
+                      +{group.comics.length - 12}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Library Page ─────────────────────────────────────────────────────────────
 
 export function LibraryPage() {
@@ -128,6 +262,7 @@ export function LibraryPage() {
     (searchParams.get('status') as LibraryFilter) ?? 'ALL'
   )
   const [sortBy, setSortBy] = useState<SortBy>('added_desc')
+  const [viewMode, setViewMode] = useState<'grid' | 'series'>('grid')
   const [page, setPage] = useState(1)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   // Multi-select
@@ -270,6 +405,23 @@ export function LibraryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* View mode toggle */}
+          <div className="flex rounded-md border border-input overflow-hidden">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-2.5 py-1.5 transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title={t('library.viewGrid')}
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('series')}
+              className={`px-2.5 py-1.5 transition-colors ${viewMode === 'series' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title={t('library.viewSeries')}
+            >
+              <Layers className="size-4" />
+            </button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -460,7 +612,9 @@ export function LibraryPage() {
       </div>
 
       {/* Content */}
-      {isLoading ? (
+      {viewMode === 'series' ? (
+        <SeriesGroupView filter={activeFilter} q={q} />
+      ) : isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="space-y-2">

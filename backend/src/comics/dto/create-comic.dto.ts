@@ -83,4 +83,9 @@ export class CreateComicDto {
   @IsString()
   @IsOptional()
   authors?: string;
+
+  @ApiPropertyOptional({ description: 'ID de la Serie a la que pertenece este cómic' })
+  @IsString()
+  @IsOptional()
+  seriesId?: string;
 }

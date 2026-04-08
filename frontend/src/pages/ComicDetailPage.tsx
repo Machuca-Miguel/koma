@@ -1,15 +1,18 @@
-import { useState, useRef, Fragment, type ReactNode } from 'react'
+import { useState, useRef, useEffect, Fragment, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft, BookOpen, Building2, Calendar, Star, Users, FileText,
   Layers, Globe, ExternalLink, Hash, Pencil, X, Tag, Copy, ShoppingCart, Lock,
+  ChevronDown, Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { comicsApi } from '@/api/comics'
 import { gcdApi } from '@/api/gcd'
 import { libraryApi } from '@/api/library'
+import { seriesApi } from '@/api/series'
+import type { SeriesSummary } from '@/api/series'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -112,19 +115,50 @@ function TagInput({ comicId, tags }: {
 
 const BINDING_OPTIONS: BindingFormat[] = ['CARTONE', 'TAPA_BLANDA', 'BOLSILLO', 'OMNIBUS', 'HARDCOVER']
 
-function EditSheet({ comicId, initial, open, onClose }: {
+function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
   comicId: string
   initial: {
     title: string; publisher?: string; year?: number; synopsis?: string
     coverUrl?: string; isbn?: string; binding?: BindingFormat; drawingStyle?: string; series?: string
-    authors?: string; externalApi?: string
+    seriesId?: string; authors?: string; externalApi?: string
   }
   open: boolean
   onClose: () => void
+  focusOnCover?: boolean
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const [form, setForm] = useState({ ...initial })
+  const [form, setForm] = useState({ ...initial, seriesId: initial.seriesId ?? null as string | null })
+  const coverInputRef = useRef<HTMLInputElement>(null)
+  const [seriesSearch, setSeriesSearch] = useState('')
+  const [showSeriesDropdown, setShowSeriesDropdown] = useState(false)
+
+  const { data: seriesList = [] } = useQuery({
+    queryKey: ['series', seriesSearch],
+    queryFn: () => seriesApi.getAll(seriesSearch ? { q: seriesSearch } : undefined),
+    staleTime: 30_000,
+  })
+
+  const createSeriesMutation = useMutation({
+    mutationFn: (name: string) => seriesApi.create({ name }),
+    onSuccess: (newSeries) => {
+      qc.invalidateQueries({ queryKey: ['series'] })
+      setForm((p) => ({ ...p, seriesId: newSeries.id, series: newSeries.name }))
+      setSeriesSearch('')
+      setShowSeriesDropdown(false)
+    },
+  })
+
+  useEffect(() => {
+    if (open && focusOnCover) {
+      // Espera a que el sheet termine su animación de entrada antes del foco
+      const timer = setTimeout(() => {
+        coverInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        coverInputRef.current?.focus()
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [open, focusOnCover])
 
   const editMutation = useMutation({
     mutationFn: () => comicsApi.update(comicId, {
@@ -136,8 +170,9 @@ function EditSheet({ comicId, initial, open, onClose }: {
       isbn: form.isbn || undefined,
       binding: form.binding || null,
       drawingStyle: form.drawingStyle || undefined,
-      series: form.series || undefined,
+      series: form.seriesId ? undefined : (form.series || undefined),
       authors: form.authors || undefined,
+      seriesId: form.seriesId ?? null,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comic', comicId] })
@@ -153,21 +188,21 @@ function EditSheet({ comicId, initial, open, onClose }: {
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:w-[600px] overflow-y-auto flex flex-col p-0 gap-0">
+      <SheetContent className="w-full sm:w-[680px] lg:w-[760px] overflow-y-auto flex flex-col p-0 gap-0">
         <SheetHeader className="sheet-header">
           <SheetTitle className="text-lg">{t('comicDetail.editComic')}</SheetTitle>
         </SheetHeader>
-        <div className="sheet-body">
-          <div className="space-y-2">
+        <div className="sheet-body space-y-5">
+          <div className="space-y-1.5">
             <label className="text-sm font-medium">Título *</label>
             <Input value={form.title} onChange={set('title')} className="h-10" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">{t('comicDetail.publisher')}</label>
               <Input value={form.publisher ?? ''} onChange={set('publisher')} className="h-10" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">{t('comicDetail.years')}</label>
               <Input
                 type="number"
@@ -179,16 +214,83 @@ function EditSheet({ comicId, initial, open, onClose }: {
               />
             </div>
           </div>
-          <div className="space-y-2">
+          {/* Serie — combobox con búsqueda y creación */}
+          <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('comicDetail.series')}</label>
-            <Input value={form.series ?? ''} onChange={set('series')} className="h-10" />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowSeriesDropdown((v) => !v)}
+                className="w-full h-10 flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <span className={form.seriesId ? 'text-foreground' : 'text-muted-foreground'}>
+                  {form.seriesId
+                    ? (seriesList.find((s) => s.id === form.seriesId)?.name ?? form.series ?? t('comicDetail.seriesPlaceholder'))
+                    : (form.series || t('comicDetail.seriesPlaceholder'))}
+                </span>
+                <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+              </button>
+              {form.seriesId && (
+                <button
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, seriesId: null, series: '' }))}
+                  className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+              {showSeriesDropdown && (
+                <div className="absolute top-full left-0 right-0 z-30 mt-1 rounded-md border bg-popover shadow-md overflow-hidden">
+                  <div className="p-2">
+                    <input
+                      autoFocus
+                      value={seriesSearch}
+                      onChange={(e) => setSeriesSearch(e.target.value)}
+                      placeholder={t('comicDetail.seriesSearchPlaceholder')}
+                      className="w-full h-8 px-2 text-sm bg-muted rounded border-0 outline-none"
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {seriesList.length === 0 && seriesSearch && (
+                      <button
+                        type="button"
+                        onMouseDown={() => createSeriesMutation.mutate(seriesSearch)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent text-primary"
+                      >
+                        <Plus className="size-3.5" />
+                        {t('comicDetail.seriesCreate', { name: seriesSearch })}
+                      </button>
+                    )}
+                    {seriesList.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onMouseDown={() => {
+                          setForm((p) => ({ ...p, seriesId: s.id, series: s.name }))
+                          setShowSeriesDropdown(false)
+                          setSeriesSearch('')
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between gap-2 ${form.seriesId === s.id ? 'bg-accent/50 font-medium' : ''}`}
+                      >
+                        <span className="truncate">{s.name}</span>
+                        {s.publisher && <span className="text-xs text-muted-foreground shrink-0">{s.publisher}</span>}
+                      </button>
+                    ))}
+                    {seriesList.length === 0 && !seriesSearch && (
+                      <p className="px-3 py-4 text-xs text-muted-foreground text-center">{t('comicDetail.seriesEmpty')}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="space-y-2">
+
+          <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('comicDetail.coverUrlField')}</label>
-            <Input value={form.coverUrl ?? ''} onChange={set('coverUrl')} placeholder="https://..." className="h-10" />
+            <Input ref={coverInputRef} value={form.coverUrl ?? ''} onChange={set('coverUrl')} placeholder="https://..." className="h-10" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <label className="text-sm font-medium">{t('comicDetail.isbn')}</label>
                 {initial.externalApi && (
@@ -204,13 +306,13 @@ function EditSheet({ comicId, initial, open, onClose }: {
                 className={`h-10 ${initial.externalApi ? 'bg-muted cursor-not-allowed opacity-60 font-mono text-xs' : ''}`}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">{t('comicDetail.binding')}</label>
               <Select
                 value={form.binding ?? '__none__'}
                 onValueChange={(v) => setForm((p) => ({ ...p, binding: v === '__none__' ? undefined : v as BindingFormat }))}
               >
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">—</SelectItem>
                   {BINDING_OPTIONS.map((b) => (
@@ -221,16 +323,16 @@ function EditSheet({ comicId, initial, open, onClose }: {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">{t('comicDetail.authors')}</label>
               <Input value={form.authors ?? ''} onChange={set('authors')} placeholder="Frank Miller, Alan Moore..." className="h-10" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">{t('comicDetail.drawingStyle')}</label>
               <Input value={form.drawingStyle ?? ''} onChange={set('drawingStyle')} placeholder="Línea clara, realista..." className="h-10" />
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('comicDetail.synopsis')}</label>
             <Textarea
               value={form.synopsis ?? ''}
@@ -260,6 +362,7 @@ export function ComicDetailPage() {
   const [notes, setNotes] = useState<string | undefined>(undefined)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editFocusCover, setEditFocusCover] = useState(false)
 
   const { data: comic, isLoading } = useQuery({
     queryKey: ['comic', id],
@@ -341,7 +444,7 @@ export function ComicDetailPage() {
             <div className="shrink-0 w-full sm:w-48">
               <div
                 className="relative w-full aspect-[2/3] rounded-xl overflow-hidden bg-muted group/cover cursor-pointer"
-                onClick={() => setIsEditOpen(true)}
+                onClick={() => { setEditFocusCover(true); setIsEditOpen(true) }}
                 title={t(comic.coverUrl ? 'comicDetail.changeCover' : 'comicDetail.addCover')}
               >
                 {comic.coverUrl ? (
@@ -693,7 +796,8 @@ export function ComicDetailPage() {
         <EditSheet
           comicId={comic.id}
           open={isEditOpen}
-          onClose={() => setIsEditOpen(false)}
+          onClose={() => { setIsEditOpen(false); setEditFocusCover(false) }}
+          focusOnCover={editFocusCover}
           initial={{
             title: comic.title,
             publisher: comic.publisher,
@@ -704,6 +808,7 @@ export function ComicDetailPage() {
             binding: comic.binding,
             drawingStyle: comic.drawingStyle,
             series: comic.series,
+            seriesId: comic.seriesId,
             authors: comic.authors,
             externalApi: comic.externalApi,
           }}
