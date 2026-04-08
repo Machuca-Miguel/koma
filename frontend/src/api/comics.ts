@@ -35,6 +35,7 @@ export const comicsApi = {
     drawingStyle?: string
     series?: string
     authors?: string
+    seriesId?: string | null
   }) => api.patch<Comic>(`/comics/${comicId}`, data).then((r) => r.data),
 
   getTags: () =>
