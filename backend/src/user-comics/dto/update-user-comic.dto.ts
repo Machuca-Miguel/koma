@@ -5,36 +5,34 @@ import {
   IsInt,
   Min,
   Max,
-  IsBoolean,
+  IsIn,
 } from 'class-validator';
+import { CollectionStatus, ReadStatus, SaleStatus } from '@prisma/client';
+
+const COLLECTION_STATUS_VALUES = [...Object.values(CollectionStatus), null];
+const READ_STATUS_VALUES = [...Object.values(ReadStatus), null];
+const SALE_STATUS_VALUES = [...Object.values(SaleStatus), null];
 
 export class UpdateUserComicDto {
-  @ApiPropertyOptional()
-  @IsBoolean()
+  @ApiPropertyOptional({ enum: CollectionStatus, nullable: true,
+    description: 'Group 1 — Collection status. null only when saleStatus=SOLD' })
+  @IsIn(COLLECTION_STATUS_VALUES)
   @IsOptional()
-  isOwned?: boolean;
+  collectionStatus?: CollectionStatus | null;
 
-  @ApiPropertyOptional()
-  @IsBoolean()
+  @ApiPropertyOptional({ enum: ReadStatus, nullable: true,
+    description: 'Grupo 2 — Estado de lectura' })
+  @IsIn(READ_STATUS_VALUES)
   @IsOptional()
-  isRead?: boolean;
+  readStatus?: ReadStatus | null;
 
-  @ApiPropertyOptional()
-  @IsBoolean()
+  @ApiPropertyOptional({ enum: SaleStatus, nullable: true,
+    description: 'Group 3 — Sale status. SOLD clears collectionStatus automatically' })
+  @IsIn(SALE_STATUS_VALUES)
   @IsOptional()
-  isWishlist?: boolean;
+  saleStatus?: SaleStatus | null;
 
-  @ApiPropertyOptional()
-  @IsBoolean()
-  @IsOptional()
-  isFavorite?: boolean;
-
-  @ApiPropertyOptional()
-  @IsBoolean()
-  @IsOptional()
-  isLoaned?: boolean;
-
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Who the comic is loaned to (only applies with LOANED)' })
   @IsString()
   @IsOptional()
   loanedTo?: string;

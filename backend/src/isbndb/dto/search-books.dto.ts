@@ -30,7 +30,7 @@ export class SearchBooksDto {
   @Min(1)
   page?: number;
 
-  @ApiProperty({ required: false, default: 20, maximum: 100 })
+  @ApiProperty({ required: false, default: 100, maximum: 100 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

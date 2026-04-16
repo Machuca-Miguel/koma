@@ -49,7 +49,7 @@
 }
 
 /* ─────────────────────────────────────────────
-   ComicVault Design System
+   Koma Design System
    Primary  #00B8A7  cian/menta
    Accent   #FF8A65  coral/melocotón
    Danger   #F43F5E  rojo rosado
@@ -222,4 +222,9 @@
     ────────────────────────────────────────────────────────── */
     .empty-state      { @apply flex flex-col items-center justify-center py-24 text-center; }
     .empty-state-icon { @apply flex items-center justify-center size-16 rounded-2xl bg-muted mb-4; }
+
+    /* ── View all link ─────────────────────────────────────────
+       Enlace "Ver todos" estándar al lado de cabeceras de sección.
+    ────────────────────────────────────────────────────────── */
+    .view-all-link { @apply text-xs font-bold text-primary tracking-widest uppercase hover:underline transition-colors; }
 }

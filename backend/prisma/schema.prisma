@@ -28,29 +28,7 @@ model User {
   @@map("users")
 }
 
-// Serie como entidad propia — agrupa issues y permite tracking de completitud
-model Series {
-  id          String   @id @default(cuid())
-  name        String
-  publisher   String?
-  yearBegan   Int?     @map("year_began")
-  yearEnded   Int?     @map("year_ended")
-  totalIssues Int?     @map("total_issues")
-  // ID de la serie en GCD (gcd_series.id) — null si no viene de GCD
-  gcdSeriesId    Int?     @unique @map("gcd_series_id")
-  // URL de la colección en Tebeosfera — null si no viene de Tebeosfera
-  tebeosferaUrl  String?  @unique @map("tebeosfera_url")
-  // Portada representativa (la del primer issue importado, o manual)
-  coverUrl    String?  @map("cover_url")
-  isOngoing   Boolean  @default(true) @map("is_ongoing")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  comics      Comic[]
-
-  @@map("series")
-}
-
+// Volumen / Cómic — puede estar en una CollectionSeries o ser libre (null)
 model Comic {
   id           String         @id @default(cuid())
   title        String
@@ -59,57 +37,48 @@ model Comic {
   year         Int?
   synopsis     String?        @db.Text
   coverUrl     String?        @map("cover_url")
-  // ID del cómic en la API externa (Comic Vine, Marvel, etc.)
-  externalId   String?        @map("external_id")
-  externalApi  String?        @map("external_api") // "gcd" | "google_books" | "open_library" | "isbndb"
-  // Metadatos variables de APIs externas guardados como JSON
-  metadata     Json?
-  // Campos de coleccionista
   isbn         String?
   binding      BindingFormat?
   drawingStyle String?        @map("drawing_style")
   authors      String?
-  // Nombre de serie denormalizado (fallback para cómics sin FK a Series)
-  series       String?
-  // Relación con entidad Series (nullable — cómics importados antes de la migración no la tienen)
-  seriesId     String?        @map("series_id")
-  seriesRef    Series?        @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  // Phantom: cómic creado desde Tebeosfera con datos mínimos, pendiente de enriquecer con ISBN
-  isPhantom    Boolean        @default(false) @map("is_phantom")
-  tebeosferaUrl String?       @map("tebeosfera_url") // URL del número en Tebeosfera
-  // Estado del lookup automático de serie en Tebeosfera: pending | found | not_found | error | null
-  tebeosferaStatus String?    @map("tebeosfera_status")
+  scriptwriter String?
+  artist       String?
+  // Pertenece a una Serie (null = libre, no asignado a ninguna colección)
+  collectionSeriesId String?           @map("collection_series_id")
+  collectionSeries   CollectionSeries? @relation(fields: [collectionSeriesId], references: [id], onDelete: SetNull)
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
   userComics   UserComic[]
   tags         ComicTag[]
-  collections  CollectionComic[]
 
   @@map("comics")
 }
 
 // Tabla pivote: relación Usuario ↔ Cómic con estado personalizado
+// Grupo 1 (collectionStatus) y Grupo 3 (saleStatus) tienen exclusión cruzada:
+//   SOLD → collectionStatus = null (ya no está en posesión del usuario)
+//   FOR_SALE / TO_SELL son compatibles con IN_COLLECTION o LOANED
 model UserComic {
-  id         String   @id @default(cuid())
-  // Estados múltiples simultáneos (un cómic puede ser TENGO + LEÍDO + FAVORITO a la vez)
-  isOwned    Boolean  @default(false) @map("is_owned")
-  isRead     Boolean  @default(false) @map("is_read")
-  isWishlist Boolean  @default(false) @map("is_wishlist")
-  isFavorite Boolean  @default(false) @map("is_favorite")
-  // Préstamos
-  isLoaned   Boolean  @default(false) @map("is_loaned")
-  loanedTo   String?  @map("loaned_to")
-  rating     Int?                     // 1-5, null si no ha puntuado
-  notes      String?  @db.Text
-  addedAt    DateTime @default(now()) @map("added_at")
+  id               String            @id @default(cuid())
+  // Grupo 1 — Estado de colección (excluyente con SOLD del grupo 3)
+  collectionStatus CollectionStatus? @map("collection_status")
+  // Grupo 2 — Estado de lectura
+  readStatus       ReadStatus?       @map("read_status")
+  // Grupo 3 — Estado de venta/mercadillo
+  saleStatus       SaleStatus?       @map("sale_status")
+  // Campo de apoyo para LOANED
+  loanedTo         String?           @map("loaned_to")
+  rating           Int?                        // 1-5, null si no ha puntuado
+  notes            String?           @db.Text
+  addedAt          DateTime          @default(now()) @map("added_at")
+  seriesPosition   Int?              @map("series_position")
 
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String @map("user_id")
   comic     Comic  @relation(fields: [comicId], references: [id], onDelete: Cascade)
   comicId   String @map("comic_id")
 
-  // Un usuario no puede tener el mismo cómic duplicado en su colección
   @@unique([userId, comicId])
   @@map("user_comics")
 }
@@ -122,41 +91,69 @@ enum BindingFormat {
   HARDCOVER
 }
 
-// Colecciones temáticas creadas por el usuario (ej: "Mi colección de Batman")
+// ─── Enums de estado UserComic ─────────────────────────────────────────────────
+
+// Group 1: Ownership status (mutually exclusive)
+enum CollectionStatus {
+  IN_COLLECTION
+  WISHLIST
+  LOANED
+}
+
+// Group 2: Reading status (mutually exclusive)
+enum ReadStatus {
+  READ
+  READING
+  TO_READ
+}
+
+// Group 3: Sale/marketplace status (mutually exclusive)
+// SOLD implies collectionStatus = null
+enum SaleStatus {
+  FOR_SALE
+  TO_SELL
+  SOLD
+}
+
+// Colección temática del usuario (ej: "Mi colección de Astérix")
+// Siempre tiene al menos una Serie "Principal" creada automáticamente
 model Collection {
   id          String   @id @default(cuid())
   name        String
   description String?  @db.Text
   isPublic    Boolean  @default(false) @map("is_public")
-  rating      Int?     // 1-5 estrellas
+  rating      Int?
   createdAt   DateTime @default(now()) @map("created_at")
 
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String  @map("user_id")
-  comics      CollectionComic[]
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  series CollectionSeries[]
 
   @@map("collections")
 }
 
-// Relación M:N entre Collection y Comic
-model CollectionComic {
+// Serie dentro de una Colección (ej: "Principal", "Edición Deluxe")
+// totalVolumes = número de volúmenes esperados en esta serie
+model CollectionSeries {
+  id           String     @id @default(cuid())
+  name         String
+  isDefault    Boolean    @default(false) @map("is_default")
+  position     Int        @default(0)
+  totalVolumes Int?       @map("total_volumes")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
   collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   collectionId String     @map("collection_id")
-  comic        Comic      @relation(fields: [comicId], references: [id], onDelete: Cascade)
-  comicId      String     @map("comic_id")
-  addedAt      DateTime   @default(now()) @map("added_at")
-  position     Int?       // Orden manual del usuario dentro de la colección (1 = primero)
+  comics       Comic[]
 
-  @@id([collectionId, comicId])
-  @@map("collection_comics")
+  @@map("collection_series")
 }
 
-// Tags para categorizar cómics (ej: "superhéroe", "noir", "dc-universe")
-// El agente IA los asignará automáticamente basándose en la sinopsis
+// Tags para categorizar cómics (asignados por el agente IA o manualmente)
 model Tag {
   id     String     @id @default(cuid())
   name   String     @unique
-  slug   String     @unique // "super-heroe", "noir"
+  slug   String     @unique
 
   comics ComicTag[]
 

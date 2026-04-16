@@ -37,6 +37,12 @@ export class ComicsController {
     return this.comicsService.getTagsByUser(req.user.id);
   }
 
+  @Get(':id/collections')
+  @ApiOperation({ summary: 'Obtener colecciones que contienen este cómic' })
+  getCollections(@Param('id') id: string) {
+    return this.comicsService.getCollections(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un cómic por ID' })
   findOne(@Param('id') id: string) {

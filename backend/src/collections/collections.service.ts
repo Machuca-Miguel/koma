@@ -12,21 +12,24 @@ import { UpdateCollectionDto } from './dto/update-collection.dto';
 export class CollectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Calcula el rango de años de los cómics de cada colección
   private async attachYearRange<T extends { id: string }>(collections: T[]) {
     if (!collections.length) return collections.map((col) => ({ ...col, yearRange: null }));
 
     const ids = collections.map((c) => c.id);
 
-    // Fetch all collection-comic pairs that have a year in one query
-    const entries = await this.prisma.collectionComic.findMany({
-      where: { collectionId: { in: ids }, comic: { year: { not: null } } },
-      select: { collectionId: true, comic: { select: { year: true } } },
+    const comics = await this.prisma.comic.findMany({
+      where: {
+        collectionSeries: { collectionId: { in: ids } },
+        year: { not: null },
+      },
+      select: { year: true, collectionSeries: { select: { collectionId: true } } },
     });
 
-    // Build min/max map in JS
     const yearMap = new Map<string, { min: number; max: number }>();
-    for (const { collectionId, comic } of entries) {
-      if (comic.year === null) continue;
+    for (const comic of comics) {
+      if (!comic.year || !comic.collectionSeries) continue;
+      const collectionId = comic.collectionSeries.collectionId;
       const existing = yearMap.get(collectionId);
       if (!existing) {
         yearMap.set(collectionId, { min: comic.year, max: comic.year });
@@ -47,190 +50,154 @@ export class CollectionsService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       include: {
-        _count: { select: { comics: true } },
-        comics: {
-          take: 4,
-          orderBy: [{ position: 'asc' }, { addedAt: 'desc' }],
-          select: { comic: { select: { coverUrl: true } } },
+        series: {
+          include: {
+            _count: { select: { comics: true } },
+            comics: {
+              take: 2,
+              orderBy: { createdAt: 'desc' },
+              select: { coverUrl: true },
+            },
+          },
         },
       },
     });
 
     const withRange = await this.attachYearRange(collections);
 
-    // Flatten cover URLs into a clean array
-    return withRange.map(({ comics, ...col }) => ({
-      ...col,
-      previewCovers: comics
-        .map((c) => c.comic.coverUrl)
-        .filter((url): url is string => !!url),
-    }));
+    return withRange.map(({ series, ...col }) => {
+      const comicsCount = series.reduce((sum, s) => sum + s._count.comics, 0);
+      const previewCovers = series
+        .flatMap((s) => s.comics.map((c) => c.coverUrl))
+        .filter((url): url is string => !!url)
+        .slice(0, 4);
+      return { ...col, _count: { comics: comicsCount }, previewCovers };
+    });
   }
 
   async findOne(id: string, userId: string) {
-    const collection = await this.prisma.collection.findUnique({
-      where: { id },
-      include: { _count: { select: { comics: true } } },
-    });
+    const collection = await this.prisma.collection.findUnique({ where: { id } });
     if (!collection) throw new NotFoundException('Colección no encontrada');
-    if (collection.userId !== userId && !collection.isPublic) {
+    if (collection.userId !== userId && !collection.isPublic)
       throw new ForbiddenException('No tienes acceso a esta colección');
-    }
     const [withRange] = await this.attachYearRange([collection]);
     return withRange;
   }
 
+  // Devuelve todos los cómics de una colección (vía sus series)
   async findComics(collectionId: string, userId: string) {
     await this.findOne(collectionId, userId);
-    const entries = await this.prisma.collectionComic.findMany({
-      where: { collectionId },
+    const comics = await this.prisma.comic.findMany({
+      where: { collectionSeries: { collectionId } },
       include: {
-        comic: {
-          include: {
-            tags: { include: { tag: true } },
-            userComics: {
-              where: { userId },
-              select: {
-                isOwned: true,
-                isRead: true,
-                isWishlist: true,
-                isFavorite: true,
-                isLoaned: true,
-                rating: true,
-              },
-              take: 1,
-            },
+        tags: { include: { tag: true } },
+        collectionSeries: true,
+        userComics: {
+          where: { userId },
+          select: {
+            collectionStatus: true,
+            readStatus: true,
+            saleStatus: true,
+            loanedTo: true,
+            rating: true,
           },
+          take: 1,
         },
       },
-      orderBy: [
-        { position: 'asc' },
-        { addedAt: 'desc' },
-      ],
+      orderBy: [{ collectionSeries: { name: 'asc' } }, { issueNumber: 'asc' }],
     });
 
-    // Flatten userComics[0] into a userStatus field for cleaner API shape
-    return entries.map(({ comic: { userComics, ...comic }, ...entry }) => ({
-      ...entry,
+    return comics.map(({ userComics, ...comic }) => ({
       comic,
       userStatus: userComics[0] ?? null,
     }));
   }
 
+  // Añade un cómic a la serie "Principal" de la colección
   async addComic(collectionId: string, userId: string, comicId: string) {
     await this.findOne(collectionId, userId);
     const comic = await this.prisma.comic.findUnique({ where: { id: comicId } });
     if (!comic) throw new NotFoundException('Cómic no encontrado');
-    const existing = await this.prisma.collectionComic.findUnique({
-      where: { collectionId_comicId: { collectionId, comicId } },
+
+    // Un cómic solo puede pertenecer a una serie
+    if (comic.collectionSeriesId) {
+      throw new ConflictException('El cómic ya pertenece a una serie');
+    }
+
+    const defaultSeries = await this.prisma.collectionSeries.findFirst({
+      where: { collectionId, isDefault: true },
     });
-    if (existing) throw new ConflictException('El cómic ya está en esta colección');
-    return this.prisma.collectionComic.create({
-      data: { collectionId, comicId },
-      include: { comic: true },
+    if (!defaultSeries) throw new NotFoundException('Serie principal no encontrada');
+
+    return this.prisma.comic.update({
+      where: { id: comicId },
+      data: { collectionSeriesId: defaultSeries.id },
+      include: { collectionSeries: true },
     });
   }
 
+  // Desvincula un cómic de su serie (lo deja libre)
   async removeComic(collectionId: string, userId: string, comicId: string) {
     await this.findOne(collectionId, userId);
-    const entry = await this.prisma.collectionComic.findUnique({
-      where: { collectionId_comicId: { collectionId, comicId } },
+    const comic = await this.prisma.comic.findFirst({
+      where: { id: comicId, collectionSeries: { collectionId } },
     });
-    if (!entry) throw new NotFoundException('El cómic no está en esta colección');
-    return this.prisma.collectionComic.delete({
-      where: { collectionId_comicId: { collectionId, comicId } },
+    if (!comic) throw new NotFoundException('El cómic no está en esta colección');
+    return this.prisma.comic.update({
+      where: { id: comicId },
+      data: { collectionSeriesId: null },
     });
   }
 
-  async reorderComics(
-    collectionId: string,
-    userId: string,
-    items: { comicId: string; position: number }[],
-  ) {
-    await this.findOne(collectionId, userId);
-    await this.prisma.$transaction(
-      items.map(({ comicId, position }) =>
-        this.prisma.collectionComic.update({
-          where: { collectionId_comicId: { collectionId, comicId } },
-          data: { position },
-        }),
-      ),
-    );
-    return { ok: true };
-  }
-
+  // Sugiere cómics de la biblioteca del usuario para añadir a la colección
   async getSuggestions(collectionId: string, userId: string) {
     await this.findOne(collectionId, userId);
 
-    // Comics already in the collection
-    const inCollection = await this.prisma.collectionComic.findMany({
-      where: { collectionId },
-      select: { comicId: true, comic: { select: { series: true, publisher: true } } },
-    });
-    const inCollectionIds = new Set(inCollection.map((c) => c.comicId));
-
-    // Gather series/publisher signals from the collection
-    const seriesSet = new Set(
-      inCollection.map((c) => c.comic.series).filter(Boolean),
-    );
-    const publisherSet = new Set(
-      inCollection.map((c) => c.comic.publisher).filter(Boolean),
-    );
-
-    // All user's library comics NOT already in this collection
-    const library = await this.prisma.userComic.findMany({
-      where: { userId },
-      include: {
-        comic: {
-          include: { tags: { include: { tag: true } } },
-        },
+    const inCollectionComics = await this.prisma.comic.findMany({
+      where: { collectionSeries: { collectionId } },
+      select: {
+        id: true,
+        publisher: true,
+        tags: { include: { tag: true } },
       },
     });
-
-    // Tags in the collection
-    const collectionComicsWithTags = await this.prisma.collectionComic.findMany({
-      where: { collectionId },
-      include: { comic: { include: { tags: { include: { tag: true } } } } },
-    });
+    const inCollectionIds = new Set(inCollectionComics.map((c) => c.id));
+    const publisherSet = new Set(
+      inCollectionComics.map((c) => c.publisher).filter(Boolean) as string[],
+    );
     const tagSet = new Set(
-      collectionComicsWithTags.flatMap((cc) =>
-        cc.comic.tags.map((t) => t.tag.slug),
-      ),
+      inCollectionComics.flatMap((c) => c.tags.map((t) => t.tag.slug)),
     );
 
-    // Score each candidate
-    type Candidate = {
-      comicId: string;
-      score: number;
-      comic: (typeof library)[0]['comic'];
-    };
+    const library = await this.prisma.userComic.findMany({
+      where: { userId },
+      include: { comic: { include: { tags: { include: { tag: true } } } } },
+    });
 
-    const candidates: Candidate[] = library
+    const candidates = library
       .filter((uc) => !inCollectionIds.has(uc.comicId))
       .map((uc) => {
         let score = 0;
-        if (uc.comic.series && seriesSet.has(uc.comic.series)) score += 3;
         if (uc.comic.publisher && publisherSet.has(uc.comic.publisher)) score += 2;
-        const comicTagSlugs = uc.comic.tags.map((t) => t.tag.slug);
-        score += comicTagSlugs.filter((s) => tagSet.has(s)).length;
+        score += uc.comic.tags.filter((t) => tagSet.has(t.tag.slug)).length;
         return { comicId: uc.comicId, score, comic: uc.comic };
       })
       .filter((c) => c.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
 
-    return candidates.map(({ comicId, score, comic }) => ({
-      comicId,
-      score,
-      comic,
-    }));
+    return candidates;
   }
 
   async create(userId: string, dto: CreateCollectionDto) {
-    return this.prisma.collection.create({
+    const collection = await this.prisma.collection.create({
       data: { ...dto, userId },
-      include: { _count: { select: { comics: true } } },
     });
+    // Auto-crear serie "Principal" por defecto
+    await this.prisma.collectionSeries.create({
+      data: { name: 'Principal', collectionId: collection.id, isDefault: true, position: 0 },
+    });
+    return collection;
   }
 
   async update(id: string, userId: string, dto: UpdateCollectionDto) {
@@ -238,11 +205,7 @@ export class CollectionsService {
     if (!collection) throw new NotFoundException('Colección no encontrada');
     if (collection.userId !== userId)
       throw new ForbiddenException('No puedes modificar esta colección');
-    return this.prisma.collection.update({
-      where: { id },
-      data: dto,
-      include: { _count: { select: { comics: true } } },
-    });
+    return this.prisma.collection.update({ where: { id }, data: dto });
   }
 
   async remove(id: string, userId: string) {
@@ -255,16 +218,15 @@ export class CollectionsService {
 
   async exportCollection(id: string, userId: string, format: 'csv' | 'json') {
     const collection = await this.findOne(id, userId);
-    const entries = await this.prisma.collectionComic.findMany({
-      where: { collectionId: id },
-      include: { comic: true },
-      orderBy: [{ position: 'asc' }, { addedAt: 'desc' }],
+    const comics = await this.prisma.comic.findMany({
+      where: { collectionSeries: { collectionId: id } },
+      include: { collectionSeries: true },
+      orderBy: [{ collectionSeries: { name: 'asc' } }, { issueNumber: 'asc' }],
     });
 
-    const rows = entries.map(({ comic, position, addedAt }) => ({
-      position: position ?? '',
+    const rows = comics.map((comic) => ({
+      serie: comic.collectionSeries?.name ?? '',
       title: comic.title,
-      series: comic.series ?? '',
       issueNumber: comic.issueNumber ?? '',
       publisher: comic.publisher ?? '',
       year: comic.year ?? '',
@@ -272,7 +234,6 @@ export class CollectionsService {
       binding: comic.binding ?? '',
       drawingStyle: comic.drawingStyle ?? '',
       coverUrl: comic.coverUrl ?? '',
-      addedAt: new Date(addedAt).toISOString().slice(0, 10),
     }));
 
     if (format === 'json') {
@@ -284,7 +245,6 @@ export class CollectionsService {
       };
     }
 
-    // CSV
     const headers = Object.keys(rows[0] ?? {}).join(',');
     const lines = rows.map((r) =>
       Object.values(r)

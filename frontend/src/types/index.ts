@@ -20,9 +20,10 @@ export interface Tag {
   slug: string
 }
 
-export type BindingFormat = 'CARTONE' | 'TAPA_BLANDA' | 'BOLSILLO' | 'OMNIBUS' | 'HARDCOVER'
+export type BindingFormat = 'CARTONE' | 'TAPA_BLANDA' | 'BOLSILLO' | 'OMNIBUS' | 'HARDCOVER' | 'SOFTCOVER' | 'DIGITAL' | 'OTRO'
 
 export interface Comic {
+  seriesPosition: ReactI18NextChildren | Iterable<ReactI18NextChildren>
   id: string
   title: string
   issueNumber?: string
@@ -30,47 +31,64 @@ export interface Comic {
   year?: number
   synopsis?: string
   coverUrl?: string
-  externalId?: string
-  externalApi?: string
   createdAt: string
   tags?: { tag: Tag }[]
   // Campos de coleccionista
   isbn?: string
   binding?: BindingFormat
   drawingStyle?: string
-  series?: string
-  seriesId?: string
   authors?: string
+  scriptwriter?: string
+  artist?: string
+  // Relación con la serie (CollectionSeries) a la que pertenece
+  collectionSeriesId?: string
+  collectionSeries?: CollectionSeries
 }
 
-// Status flags — un cómic puede tener varios a la vez
-export interface UserComicStatus {
-  isOwned: boolean
-  isRead: boolean
-  isWishlist: boolean
-  isFavorite: boolean
-  isLoaned: boolean
-  loanedTo?: string
-}
+// ─── Enums de estado UserComic ─────────────────────────────────────────────
 
-export type LibraryFilter = 'OWNED' | 'READ' | 'WISHLIST' | 'FAVORITE' | 'LOANED' | 'ALL'
+// Group 1: Ownership status (mutually exclusive)
+export type CollectionStatusValue = 'IN_COLLECTION' | 'WISHLIST' | 'LOANED'
+
+// Group 2: Reading status (mutually exclusive)
+export type ReadStatusValue = 'READ' | 'READING' | 'TO_READ'
+
+// Group 3: Sale/marketplace status (mutually exclusive)
+// SOLD implies collectionStatus = null
+export type SaleStatusValue = 'FOR_SALE' | 'TO_SELL' | 'SOLD'
+
+export type LibraryFilter =
+  | 'IN_COLLECTION' | 'WISHLIST' | 'LOANED'
+  | 'READ' | 'READING' | 'TO_READ'
+  | 'FOR_SALE' | 'TO_SELL' | 'SOLD'
+  | 'ALL'
+
 export type SortBy = 'series_asc' | 'title_asc' | 'year_asc' | 'added_desc' | 'rating_desc'
-
-// Kept for badge display helpers
-export type CollectionStatus = 'OWNED' | 'READ' | 'WISHLIST' | 'FAVORITE'
 
 export interface UserComic {
   id: string
-  isOwned: boolean
-  isRead: boolean
-  isWishlist: boolean
-  isFavorite: boolean
-  isLoaned: boolean
-  loanedTo?: string
-  rating?: number
-  notes?: string
+  collectionStatus: CollectionStatusValue | null
+  readStatus: ReadStatusValue | null
+  saleStatus: SaleStatusValue | null
+  loanedTo?: string | null
+  rating?: number | null
+  notes?: string | null
   addedAt: string
+  seriesPosition?: number | null
   comic: Comic
+}
+
+// ─── CollectionSeries ──────────────────────────────────────────────────────
+
+export interface CollectionSeries {
+  id: string
+  name: string
+  isDefault: boolean
+  position: number
+  totalVolumes?: number | null
+  collectionId: string
+  createdAt: string
+  _count?: { comics: number }
 }
 
 // ─── Collections ───────────────────────────────────────────────────────────
@@ -89,19 +107,15 @@ export interface Collection {
 }
 
 export interface CollectionComicUserStatus {
-  isOwned: boolean
-  isRead: boolean
-  isWishlist: boolean
-  isFavorite: boolean
-  isLoaned: boolean
+  collectionStatus: CollectionStatusValue | null
+  readStatus: ReadStatusValue | null
+  saleStatus: SaleStatusValue | null
+  loanedTo?: string | null
   rating?: number | null
 }
 
+// Respuesta del endpoint GET /collections/:id/comics
 export interface CollectionComic {
-  collectionId: string
-  comicId: string
-  addedAt: string
-  position?: number | null
   comic: Comic
   userStatus?: CollectionComicUserStatus | null
 }
@@ -112,120 +126,18 @@ export interface CollectionSuggestion {
   comic: Comic
 }
 
-// ─── GCD ───────────────────────────────────────────────────────────────────
-
-export interface GcdComic {
-  externalId: string
-  title: string
-  issueNumber?: string
-  publisher?: string
-  year?: number
-  synopsis?: string
-  coverUrl?: string
-  isbn?: string
-  series?: string
-}
-
-export interface GcdSearchResult {
-  data: GcdComic[]
-  total: number
-  page: number
-}
-
-export interface GcdCreatorRole {
-  role: string
-  names: string[]
-}
-
-export interface GcdStory {
-  title?: string
-  type?: string
-  pageCount?: number
-  synopsis?: string
-  genre?: string
-  characters?: string
-  feature?: string
-  firstLine?: string
-}
-
-export interface GcdSeriesInfo {
-  name: string
-  format?: string
-  yearBegan?: number
-  yearEnded?: number
-  issueCount?: number
-  publicationDates?: string
-  color?: string
-  dimensions?: string
-  paperStock?: string
-  binding?: string
-  publishingFormat?: string
-}
-
-export interface GcdPublisherInfo {
-  name: string
-  yearBegan?: number
-  yearEnded?: number
-  url?: string
-}
-
-export interface GcdComicDetail extends GcdComic {
-  pageCount?: number
-  price?: string
-  onSaleDate?: string
-  barcode?: string
-  isbn?: string
-  creators: GcdCreatorRole[]
-  stories: GcdStory[]
-  seriesInfo?: GcdSeriesInfo
-  publisherInfo?: GcdPublisherInfo
-}
-
-// ─── GCD Series ────────────────────────────────────────────────────────────
-
-export interface GcdSeriesSummary {
-  seriesId: number
-  name: string
-  publisher?: string
-  yearBegan?: number
-  yearEnded?: number
-  issueCount?: number
-}
-
-export interface GcdSeriesSearchResult {
-  data: GcdSeriesSummary[]
-  total: number
-  page: number
-}
-
-export interface GcdSeriesCompletion {
-  seriesName: string | null
-  total: number
-  owned: number
-  issues: Array<{
-    gcdId: string
-    issueNumber: string | null
-    title: string | null
-    year: number | null
-    isOwned: boolean
-  }>
-}
-
 // ─── Library Series View ───────────────────────────────────────────────────
 
 export interface UserSeriesSummary {
-  seriesId: string | null
-  gcdSeriesId: number | null
+  collectionSeriesId: string | null
   seriesName: string
-  publisher: string | null
+  collectionId: string | null
   coverUrl: string | null
   totalCount: number | null
-  isOngoing: boolean | null
   ownedCount: number
   comicCount: number
   comics: UserComic[]
 }
-
 
 // ─── Pagination ────────────────────────────────────────────────────────────
 

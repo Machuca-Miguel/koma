@@ -166,56 +166,62 @@ function EditCollectionDialog({ open, onClose, collection }: {
   )
 }
 
-// ─── Interactive status badges + mini rating ─────────────────────────────────
+// ─── Status badges (indicadores visuales de colección y lectura) ─────────────
 
-type StatusFlag = 'isOwned' | 'isRead' | 'isFavorite' | 'isWishlist' | 'isLoaned'
+type CollStatusFilter = 'IN_COLLECTION' | 'WISHLIST' | 'LOANED' | 'READ' | 'READING' | 'TO_READ'
 
-const STATUS_FLAG_META: {
-  flag: StatusFlag
-  Icon: typeof Library
-  color: string
-  inactiveColor: string
-  i18nKey: string
-}[] = [
-  { flag: 'isOwned',    Icon: Library,        color: 'text-emerald-500', inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_owned'    },
-  { flag: 'isRead',     Icon: Eye,            color: 'text-blue-500',    inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_read'     },
-  { flag: 'isFavorite', Icon: Heart,          color: 'text-rose-500',    inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_favorite' },
-  { flag: 'isWishlist', Icon: Bookmark,       color: 'text-amber-500',   inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_wishlist' },
-  { flag: 'isLoaned',   Icon: ArrowRightLeft, color: 'text-orange-500',  inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_loaned'   },
-]
+const COLL_STATUS_ICON: Record<string, { Icon: typeof Library; color: string; i18nKey: string }> = {
+  IN_COLLECTION: { Icon: Library,        color: 'text-primary',        i18nKey: 'collections.badge_IN_COLLECTION' },
+  WISHLIST:      { Icon: Bookmark,       color: 'text-sky-500',        i18nKey: 'collections.badge_WISHLIST'      },
+  LOANED:        { Icon: ArrowRightLeft, color: 'text-violet-500',     i18nKey: 'collections.badge_LOANED'        },
+}
+const READ_STATUS_ICON: Record<string, { Icon: typeof Library; color: string; i18nKey: string }> = {
+  READ:    { Icon: Eye,      color: 'text-emerald-500',       i18nKey: 'collections.badge_READ'    },
+  READING: { Icon: BookOpen, color: 'text-amber-500',         i18nKey: 'collections.badge_READING' },
+  TO_READ: { Icon: Library,  color: 'text-muted-foreground/50', i18nKey: 'collections.badge_TO_READ' },
+}
 
 function InteractiveStatusBadges({
-  comicId,
   status,
-  onToggle,
 }: {
   comicId: string
   status: CollectionComicUserStatus | null | undefined
-  onToggle: (comicId: string, flag: StatusFlag, current: boolean) => void
+  onToggle: (comicId: string, flag: CollStatusFilter, current: boolean) => void
 }) {
   const { t } = useTranslation()
+  const collMeta = status?.collectionStatus ? COLL_STATUS_ICON[status.collectionStatus] : null
+  const readMeta = status?.readStatus ? READ_STATUS_ICON[status.readStatus] : null
   return (
     <TooltipProvider delayDuration={400}>
       <div className="flex items-center gap-1">
-        {STATUS_FLAG_META.map(({ flag, Icon, color, inactiveColor, i18nKey }) => {
-          const active = status?.[flag] ?? false
+        {collMeta && (() => {
+          const { Icon, color, i18nKey } = collMeta
           return (
-            <Tooltip key={flag}>
+            <Tooltip key="coll">
               <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(comicId, flag, active) }}
-                  className="p-0.5 rounded transition-transform hover:scale-110"
-                >
-                  <Icon className={`size-3.5 transition-colors ${active ? color : inactiveColor}`} />
-                </button>
+                <span className="p-0.5">
+                  <Icon className={`size-3.5 ${color}`} />
+                </span>
               </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {t(i18nKey)}
-              </TooltipContent>
+              <TooltipContent side="top" className="text-xs">{t(i18nKey as never)}</TooltipContent>
             </Tooltip>
           )
-        })}
+        })()}
+        {readMeta && (() => {
+          const { Icon, color, i18nKey } = readMeta
+          return (
+            <Tooltip key="read">
+              <TooltipTrigger asChild>
+                <span className="p-0.5">
+                  <Icon className={`size-3.5 ${color}`} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">{t(i18nKey as never)}</TooltipContent>
+            </Tooltip>
+          )
+        })()}
+        {/* placeholder invisible para mantener el layout cuando no hay iconos */}
+        {!collMeta && !readMeta && <span className="size-3.5" />}
       </div>
     </TooltipProvider>
   )
@@ -410,7 +416,7 @@ function AddComicsSheet({ open, onClose, collectionId, existingIds }: {
     const q = search.toLowerCase()
     return all.filter((uc) =>
       uc.comic.title.toLowerCase().includes(q) ||
-      uc.comic.series?.toLowerCase().includes(q) ||
+      uc.comic.collectionSeries?.name?.toLowerCase().includes(q) ||
       uc.comic.publisher?.toLowerCase().includes(q),
     )
   }, [library, existingIds, search])
@@ -514,9 +520,9 @@ function AddComicsSheet({ open, onClose, collectionId, existingIds }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{comic.title}</p>
-                    {(comic.series || comic.publisher) && (
+                    {(comic.collectionSeries?.name || comic.publisher) && (
                       <p className="text-xs text-muted-foreground truncate">
-                        {[comic.series, comic.publisher].filter(Boolean).join(' · ')}
+                        {[comic.collectionSeries?.name, comic.publisher].filter(Boolean).join(' · ')}
                       </p>
                     )}
                   </div>
@@ -651,9 +657,9 @@ function SuggestionsSheet({ open, onClose, collectionId, existingIds }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{comic.title}</p>
-                    {(comic.series || comic.publisher) && (
+                    {(comic.collectionSeries?.name || comic.publisher) && (
                       <p className="text-xs text-muted-foreground truncate">
-                        {[comic.series, comic.publisher].filter(Boolean).join(' · ')}
+                        {[comic.collectionSeries?.name, comic.publisher].filter(Boolean).join(' · ')}
                       </p>
                     )}
                   </div>
@@ -724,7 +730,7 @@ export function CollectionDetailPage() {
     if (q) {
       list = list.filter((item) =>
         item.comic.title.toLowerCase().includes(q) ||
-        item.comic.series?.toLowerCase().includes(q) ||
+        item.comic.collectionSeries?.name?.toLowerCase().includes(q) ||
         item.comic.publisher?.toLowerCase().includes(q),
       )
     }
@@ -732,10 +738,10 @@ export function CollectionDetailPage() {
       list = list.filter((item) => {
         const s = item.userStatus
         if (!s) return false
-        if (statusFilter === 'owned') return s.isOwned
-        if (statusFilter === 'read') return s.isRead
-        if (statusFilter === 'wishlist') return s.isWishlist
-        if (statusFilter === 'loaned') return s.isLoaned
+        if (statusFilter === 'owned')    return s.collectionStatus === 'IN_COLLECTION'
+        if (statusFilter === 'read')     return s.readStatus === 'READ'
+        if (statusFilter === 'wishlist') return s.collectionStatus === 'WISHLIST'
+        if (statusFilter === 'loaned')   return s.collectionStatus === 'LOANED'
         return true
       })
     }
@@ -817,8 +823,9 @@ export function CollectionDetailPage() {
     setReordering(false)
   }
 
+  // statusToggleMutation mantenido por compatibilidad con InteractiveStatusBadges (ahora solo lectura)
   const statusToggleMutation = useMutation({
-    mutationFn: ({ comicId, updates }: { comicId: string; updates: Record<string, boolean> }) =>
+    mutationFn: ({ comicId, updates }: { comicId: string; updates: Parameters<typeof libraryApi.update>[1] }) =>
       libraryApi.update(comicId, updates),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['collection-comics', id] })
@@ -826,14 +833,8 @@ export function CollectionDetailPage() {
     onError: () => toast.error(t('collections.updateStatusError')),
   })
 
-  function handleStatusToggle(comicId: string, flag: StatusFlag, current: boolean) {
-    const updates: Record<string, boolean> = { [flag]: !current }
-    // isOwned and isWishlist are mutually exclusive
-    if (!current) {
-      if (flag === 'isOwned') updates.isWishlist = false
-      if (flag === 'isWishlist') updates.isOwned = false
-    }
-    statusToggleMutation.mutate({ comicId, updates })
+  function handleStatusToggle(_comicId: string, _flag: CollStatusFilter, _current: boolean) {
+    // Los badges son ahora solo indicadores visuales; la edición se hace en ComicDetailPage
   }
 
   // A3 — auto-sort: calculates order and persists it via reorderComics
@@ -884,7 +885,7 @@ export function CollectionDetailPage() {
 
   if (loadingCol) {
     return (
-      <PageContainer size="narrow" className="space-y-4">
+      <PageContainer  className="space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-24 rounded-xl" />
         <Skeleton className="h-64 rounded-xl" />
@@ -894,7 +895,7 @@ export function CollectionDetailPage() {
 
   if (!collection) {
     return (
-      <PageContainer size="narrow" className="text-center text-muted-foreground">
+      <PageContainer className="text-center text-muted-foreground">
         <p>{t('collections.notFound')}</p>
         <Button variant="link" onClick={() => navigate('/collections')}>{t('collections.backToList')}</Button>
       </PageContainer>
@@ -908,7 +909,7 @@ export function CollectionDetailPage() {
     : null
 
   return (
-    <PageContainer size="narrow">
+    <PageContainer>
       {/* Back */}
       <button
         onClick={() => navigate('/collections')}

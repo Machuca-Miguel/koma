@@ -9,10 +9,11 @@ export class ComicsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: QueryComicDto) {
-    const { search, publisher, page = 1, limit = 20 } = query;
+    const { search, publisher, isbn, page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
     const where = {
+      ...(isbn && { isbn }),
       ...(search && {
         OR: [
           { title: { contains: search, mode: 'insensitive' as const } },
@@ -85,6 +86,19 @@ export class ComicsService {
   async removeTag(comicId: string, tagId: string) {
     await this.prisma.comicTag.deleteMany({ where: { comicId, tagId } });
     return this.findOne(comicId);
+  }
+
+  async getCollections(comicId: string) {
+    const comic = await this.prisma.comic.findUnique({
+      where: { id: comicId },
+      include: {
+        collectionSeries: {
+          include: { collection: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    if (!comic?.collectionSeries) return [];
+    return [comic.collectionSeries.collection];
   }
 
   async getTagsByUser(userId: string) {

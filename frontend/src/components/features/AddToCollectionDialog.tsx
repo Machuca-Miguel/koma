@@ -101,9 +101,21 @@ export function AddToCollectionDialog({
           {isLoading ? (
             <p className="text-sm text-muted-foreground text-center py-8">{t('common.loading')}</p>
           ) : filteredCollections.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              {!collections?.length ? t('collections.emptyState') : t('common.noResults')}
-            </p>
+            <div className="flex flex-col items-center gap-3 py-8">
+              <p className="text-sm text-muted-foreground text-center">
+                {!collections?.length ? t('collections.emptyState') : t('common.noResults')}
+              </p>
+              {collectionSearch.trim() && (
+                <button
+                  type="button"
+                  onClick={() => { setCreatingNew(true); setNewName(collectionSearch.trim()); setSelectedId('') }}
+                  className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                >
+                  <Plus className="size-4" />
+                  {t('collections.createNamed', { name: collectionSearch.trim() })}
+                </button>
+              )}
+            </div>
           ) : (
             filteredCollections.map((col) => (
               <button

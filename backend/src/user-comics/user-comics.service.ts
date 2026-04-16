@@ -4,7 +4,12 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  Prisma,
+  CollectionStatus,
+  ReadStatus,
+  SaleStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IsbndbService } from '../isbndb/isbndb.service';
 import { AddComicDto } from './dto/add-comic.dto';
@@ -16,12 +21,17 @@ export type SortBy =
   | 'year_asc'
   | 'added_desc'
   | 'rating_desc';
+
 export type StatusFilter =
-  | 'OWNED'
-  | 'READ'
+  | 'IN_COLLECTION'
   | 'WISHLIST'
-  | 'FAVORITE'
   | 'LOANED'
+  | 'READ'
+  | 'READING'
+  | 'TO_READ'
+  | 'FOR_SALE'
+  | 'TO_SELL'
+  | 'SOLD'
   | 'ALL';
 
 function buildOrderBy(
@@ -39,7 +49,7 @@ function buildOrderBy(
     case 'series_asc':
     default:
       return [
-        { comic: { series: 'asc' } },
+        { comic: { collectionSeries: { name: 'asc' } } },
         { comic: { title: 'asc' } },
         { comic: { issueNumber: 'asc' } },
       ];
@@ -50,16 +60,27 @@ function buildStatusWhere(
   status: StatusFilter | undefined,
 ): Prisma.UserComicWhereInput {
   switch (status) {
-    case 'OWNED':
-      return { isOwned: true };
-    case 'READ':
-      return { isRead: true };
+    // Group 1 — Collection
+    case 'IN_COLLECTION':
+      return { collectionStatus: CollectionStatus.IN_COLLECTION };
     case 'WISHLIST':
-      return { isWishlist: true };
-    case 'FAVORITE':
-      return { isFavorite: true };
+      return { collectionStatus: CollectionStatus.WISHLIST };
     case 'LOANED':
-      return { isLoaned: true };
+      return { collectionStatus: CollectionStatus.LOANED };
+    // Group 2 — Reading
+    case 'READ':
+      return { readStatus: ReadStatus.READ };
+    case 'READING':
+      return { readStatus: ReadStatus.READING };
+    case 'TO_READ':
+      return { readStatus: ReadStatus.TO_READ };
+    // Group 3 — Sale
+    case 'FOR_SALE':
+      return { saleStatus: SaleStatus.FOR_SALE };
+    case 'TO_SELL':
+      return { saleStatus: SaleStatus.TO_SELL };
+    case 'SOLD':
+      return { saleStatus: SaleStatus.SOLD };
     default:
       return {};
   }
@@ -82,7 +103,7 @@ export class UserComicsService {
       page?: number;
       limit?: number;
       q?: string;
-      searchBy?: 'title' | 'author' | 'publisher';
+      searchBy?: 'title' | 'authors' | 'scriptwriter' | 'artist' | 'publisher';
       tag?: string;
       publisher?: string;
       yearFrom?: string;
@@ -105,19 +126,26 @@ export class UserComicsService {
     const comicFilter: Record<string, unknown> = {};
     if (q) {
       if (searchBy === 'title') {
+        comicFilter['OR'] = [{ title: { contains: q, mode: 'insensitive' } }];
+      } else if (searchBy === 'scriptwriter') {
+        comicFilter['scriptwriter'] = { contains: q, mode: 'insensitive' };
+      } else if (searchBy === 'artist') {
+        comicFilter['artist'] = { contains: q, mode: 'insensitive' };
+      } else if (searchBy === 'authors') {
         comicFilter['OR'] = [
-          { title: { contains: q, mode: 'insensitive' } },
-          { series: { contains: q, mode: 'insensitive' } },
+          { scriptwriter: { contains: q, mode: 'insensitive' } },
+          { artist: { contains: q, mode: 'insensitive' } },
+          { authors: { contains: q, mode: 'insensitive' } },
         ];
-      } else if (searchBy === 'author') {
-        comicFilter['authors'] = { contains: q, mode: 'insensitive' };
       } else if (searchBy === 'publisher') {
         comicFilter['publisher'] = { contains: q, mode: 'insensitive' };
       } else {
         comicFilter['OR'] = [
           { title: { contains: q, mode: 'insensitive' } },
-          { series: { contains: q, mode: 'insensitive' } },
+          { collectionSeries: { name: { contains: q, mode: 'insensitive' } } },
           { publisher: { contains: q, mode: 'insensitive' } },
+          { scriptwriter: { contains: q, mode: 'insensitive' } },
+          { artist: { contains: q, mode: 'insensitive' } },
           { authors: { contains: q, mode: 'insensitive' } },
         ];
       }
@@ -172,10 +200,8 @@ export class UserComicsService {
       data: {
         userId,
         comicId: dto.comicId,
-        isOwned: dto.isOwned ?? true,
-        isRead: dto.isRead ?? false,
-        isWishlist: dto.isWishlist ?? false,
-        isFavorite: dto.isFavorite ?? false,
+        collectionStatus:
+          dto.collectionStatus ?? CollectionStatus.IN_COLLECTION,
         rating: dto.rating,
         notes: dto.notes,
       },
@@ -190,9 +216,35 @@ export class UserComicsService {
     if (!entry)
       throw new NotFoundException('Cómic no encontrado en tu biblioteca');
 
+    const data: Prisma.UserComicUpdateInput = {};
+
+    if (dto.readStatus !== undefined) data.readStatus = dto.readStatus;
+    if (dto.loanedTo !== undefined) data.loanedTo = dto.loanedTo;
+    if (dto.rating !== undefined) data.rating = dto.rating;
+    if (dto.notes !== undefined) data.notes = dto.notes;
+
+    if (dto.saleStatus !== undefined) {
+      data.saleStatus = dto.saleStatus;
+      // VENDIDO es exclusivo con tener un estado de colección
+      if (dto.saleStatus === SaleStatus.SOLD) {
+        data.collectionStatus = null;
+      }
+    }
+
+    if (dto.collectionStatus !== undefined) {
+      data.collectionStatus = dto.collectionStatus;
+      // Si se re-adquiere un cómic marcado como VENDIDO, limpiar VENDIDO
+      if (
+        dto.collectionStatus !== null &&
+        entry.saleStatus === SaleStatus.SOLD
+      ) {
+        data.saleStatus = null;
+      }
+    }
+
     return this.prisma.userComic.update({
       where: { userId_comicId: { userId, comicId } },
-      data: dto,
+      data,
       include: { comic: true },
     });
   }
@@ -209,7 +261,10 @@ export class UserComicsService {
     });
   }
 
-  async removeBulk(userId: string, comicIds: string[]): Promise<{ deleted: number }> {
+  async removeBulk(
+    userId: string,
+    comicIds: string[],
+  ): Promise<{ deleted: number }> {
     const result = await this.prisma.userComic.deleteMany({
       where: { userId, comicId: { in: comicIds } },
     });
@@ -225,22 +280,25 @@ export class UserComicsService {
   async exportLibrary(userId: string, format: 'csv' | 'json'): Promise<string> {
     const entries = await this.prisma.userComic.findMany({
       where: { userId },
-      include: { comic: true },
-      orderBy: [{ comic: { series: 'asc' } }, { comic: { title: 'asc' } }],
+      include: { comic: { include: { collectionSeries: true } } },
+      orderBy: [
+        { comic: { collectionSeries: { name: 'asc' } } },
+        { comic: { title: 'asc' } },
+      ],
     });
 
     const rows = entries.map((uc) => ({
       title: uc.comic.title,
-      series: uc.comic.series ?? '',
+      serie: uc.comic.collectionSeries?.name ?? '',
       issueNumber: uc.comic.issueNumber ?? '',
       publisher: uc.comic.publisher ?? '',
       year: uc.comic.year ?? '',
       isbn: uc.comic.isbn ?? '',
       binding: uc.comic.binding ?? '',
-      isOwned: uc.isOwned,
-      isRead: uc.isRead,
-      isWishlist: uc.isWishlist,
-      isFavorite: uc.isFavorite,
+      collectionStatus: uc.collectionStatus ?? '',
+      readStatus: uc.readStatus ?? '',
+      saleStatus: uc.saleStatus ?? '',
+      loanedTo: uc.loanedTo ?? '',
       rating: uc.rating ?? '',
       notes: uc.notes ?? '',
       addedAt: uc.addedAt.toISOString(),
@@ -261,6 +319,64 @@ export class UserComicsService {
     return [headers.join(','), ...csvRows].join('\n');
   }
 
+  async reorderSeries(
+    userId: string,
+    collectionSeriesId: string,
+    positions: { comicId: string; position: number }[],
+  ): Promise<{ updated: number }> {
+    await Promise.all(
+      positions.map(({ comicId, position }) =>
+        this.prisma.userComic.updateMany({
+          where: { userId, comicId, comic: { collectionSeriesId } },
+          data: { seriesPosition: position },
+        }),
+      ),
+    );
+    return { updated: positions.length };
+  }
+
+  async getSeriesDetail(userId: string, collectionSeriesId: string) {
+    const [series, userComics] = await Promise.all([
+      this.prisma.collectionSeries.findUnique({
+        where: { id: collectionSeriesId },
+        include: { collection: { select: { id: true, name: true } } },
+      }),
+      this.prisma.userComic.findMany({
+        where: { userId, comic: { collectionSeriesId } },
+        include: { comic: { include: { collectionSeries: true } } },
+        orderBy: { comic: { issueNumber: 'asc' } },
+      }),
+    ]);
+
+    if (!series) {
+      throw new NotFoundException(
+        `CollectionSeries ${collectionSeriesId} not found`,
+      );
+    }
+
+    const ownedCount = userComics.filter(
+      (e) => e.collectionStatus === CollectionStatus.IN_COLLECTION,
+    ).length;
+
+    const coverUrl =
+      userComics.find((e) => e.comic.coverUrl)?.comic.coverUrl ?? null;
+    const publisher =
+      userComics.find((e) => e.comic.publisher)?.comic.publisher ?? null;
+
+    return {
+      collectionSeriesId: series.id,
+      seriesName: series.name,
+      collectionId: series.collectionId,
+      collectionName: series.collection.name,
+      totalVolumes: series.totalVolumes ?? null,
+      ownedCount,
+      comicCount: userComics.length,
+      coverUrl,
+      publisher,
+      comics: userComics,
+    };
+  }
+
   async getSeriesView(
     userId: string,
     filters?: { status?: StatusFilter; q?: string },
@@ -270,7 +386,7 @@ export class UserComicsService {
     if (q) {
       comicFilter['OR'] = [
         { title: { contains: q, mode: 'insensitive' } },
-        { series: { contains: q, mode: 'insensitive' } },
+        { collectionSeries: { name: { contains: q, mode: 'insensitive' } } },
         { publisher: { contains: q, mode: 'insensitive' } },
         { authors: { contains: q, mode: 'insensitive' } },
       ];
@@ -286,44 +402,39 @@ export class UserComicsService {
       },
       include: {
         comic: {
-          include: { seriesRef: true },
+          include: { collectionSeries: true },
         },
       },
       orderBy: [
-        { comic: { series: 'asc' } },
+        { comic: { collectionSeries: { name: 'asc' } } },
         { comic: { issueNumber: 'asc' } },
       ],
     });
 
-    // Group by seriesId (linked) or series string (unlinked)
+    // Group by collectionSeriesId (serie asignada) o '__no_series__' (libre)
     const groups = new Map<
       string,
       {
-        seriesId: string | null;
-        gcdSeriesId: number | null;
+        collectionSeriesId: string | null;
         seriesName: string;
-        publisher: string | null;
+        collectionId: string | null;
         coverUrl: string | null;
         totalCount: number | null;
-        isOngoing: boolean | null;
         comics: typeof entries;
       }
     >();
 
     for (const entry of entries) {
       const { comic } = entry;
-      const key = comic.seriesId ?? comic.series ?? '__no_series__';
+      const key = comic.collectionSeriesId ?? '__no_series__';
 
       if (!groups.has(key)) {
-        const ref = comic.seriesRef;
         groups.set(key, {
-          seriesId: comic.seriesId ?? null,
-          gcdSeriesId: ref?.gcdSeriesId ?? null,
-          seriesName: ref?.name ?? comic.series ?? 'Sin serie',
-          publisher: ref?.publisher ?? comic.publisher ?? null,
-          coverUrl: ref?.coverUrl ?? comic.coverUrl ?? null,
-          totalCount: ref?.totalIssues ?? null,
-          isOngoing: ref ? ref.isOngoing : null,
+          collectionSeriesId: comic.collectionSeriesId ?? null,
+          seriesName: comic.collectionSeries?.name ?? 'Sin serie',
+          collectionId: comic.collectionSeries?.collectionId ?? null,
+          coverUrl: comic.coverUrl ?? null,
+          totalCount: comic.collectionSeries?.totalVolumes ?? null,
           comics: [],
         });
       }
@@ -331,14 +442,14 @@ export class UserComicsService {
     }
 
     return Array.from(groups.values()).map((g) => ({
-      seriesId: g.seriesId,
-      gcdSeriesId: g.gcdSeriesId,
+      collectionSeriesId: g.collectionSeriesId,
       seriesName: g.seriesName,
-      publisher: g.publisher,
+      collectionId: g.collectionId,
       coverUrl: g.coverUrl,
       totalCount: g.totalCount,
-      isOngoing: g.isOngoing,
-      ownedCount: g.comics.filter((e) => e.isOwned).length,
+      ownedCount: g.comics.filter(
+        (e) => e.collectionStatus === CollectionStatus.IN_COLLECTION,
+      ).length,
       comicCount: g.comics.length,
       comics: g.comics,
     }));
@@ -346,15 +457,14 @@ export class UserComicsService {
 
   async addByIsbn(
     userId: string,
-    isbn: string,
-    opts?: { isOwned?: boolean; isWishlist?: boolean },
+    isbnInput: string,
+    opts?: { collectionStatus?: CollectionStatus },
   ) {
-    const book = await this.isbndb.getBook(isbn);
-    const externalId = `isbndb-${book.isbn13 ?? book.isbn}`;
+    const book = await this.isbndb.getBook(isbnInput);
+    const isbn = book.isbn13 ?? book.isbn;
 
-    // Find or create the Comic record
     let comic = await this.prisma.comic.findFirst({
-      where: { externalId, externalApi: 'isbndb' },
+      where: { isbn },
     });
 
     if (!comic) {
@@ -371,19 +481,8 @@ export class UserComicsService {
           year,
           synopsis: book.synopsis ?? book.overview,
           coverUrl: book.image,
-          externalId,
-          externalApi: 'isbndb',
-          isbn: book.isbn13 ?? book.isbn,
+          isbn,
           authors: book.authors?.join(', ') || undefined,
-          metadata: {
-            authors: book.authors,
-            pageCount: book.pages,
-            subjects: book.subjects,
-            binding: book.binding,
-            language: book.language,
-            edition: book.edition,
-            titleLong: book.title_long,
-          },
         },
       });
     }
@@ -394,48 +493,195 @@ export class UserComicsService {
     if (existing)
       throw new ConflictException('El cómic ya está en tu biblioteca');
 
-    const userComic = await this.prisma.userComic.create({
+    return this.prisma.userComic.create({
       data: {
         userId,
         comicId: comic.id,
-        isOwned: opts?.isOwned ?? true,
-        isWishlist: opts?.isWishlist ?? false,
+        collectionStatus:
+          opts?.collectionStatus ?? CollectionStatus.IN_COLLECTION,
       },
       include: { comic: true },
     });
-
-    return userComic;
   }
 
   async getStats(userId: string) {
-    const [total, owned, read, wishlist, favorite, loaned, avgRating] =
-      await Promise.all([
-        this.prisma.userComic.count({ where: { userId } }),
-        this.prisma.userComic.count({ where: { userId, isOwned: true } }),
-        this.prisma.userComic.count({ where: { userId, isRead: true } }),
-        this.prisma.userComic.count({ where: { userId, isWishlist: true } }),
-        this.prisma.userComic.count({ where: { userId, isFavorite: true } }),
-        this.prisma.userComic.count({ where: { userId, isLoaned: true } }),
-        this.prisma.userComic.aggregate({
-          where: { userId, rating: { not: null } },
-          _avg: { rating: true },
-          _count: { rating: true },
-        }),
-      ]);
+    const [
+      total,
+      inCollection,
+      wishlist,
+      loaned,
+      read,
+      reading,
+      toRead,
+      avgRating,
+      allComics,
+    ] = await Promise.all([
+      this.prisma.userComic.count({ where: { userId } }),
+      this.prisma.userComic.count({
+        where: { userId, collectionStatus: CollectionStatus.IN_COLLECTION },
+      }),
+      this.prisma.userComic.count({
+        where: { userId, collectionStatus: CollectionStatus.WISHLIST },
+      }),
+      this.prisma.userComic.count({
+        where: { userId, collectionStatus: CollectionStatus.LOANED },
+      }),
+      this.prisma.userComic.count({
+        where: { userId, readStatus: ReadStatus.READ },
+      }),
+      this.prisma.userComic.count({
+        where: { userId, readStatus: ReadStatus.READING },
+      }),
+      this.prisma.userComic.count({
+        where: { userId, readStatus: ReadStatus.TO_READ },
+      }),
+      this.prisma.userComic.aggregate({
+        where: { userId, rating: { not: null } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+      this.prisma.userComic.findMany({
+        where: { userId },
+        select: { comic: { select: { collectionSeriesId: true } } },
+      }),
+    ]);
+
+    const seriesKeys = new Set<string>();
+    for (const uc of allComics) {
+      if (uc.comic.collectionSeriesId)
+        seriesKeys.add(uc.comic.collectionSeriesId);
+    }
 
     return {
       total,
+      seriesCount: seriesKeys.size,
       byStatus: {
-        OWNED: owned,
-        READ: read,
+        IN_COLLECTION: inCollection,
         WISHLIST: wishlist,
-        FAVORITE: favorite,
+        LOANED: loaned,
+        READ: read,
+        READING: reading,
+        TO_READ: toRead,
       },
-      loaned,
       totalRated: avgRating._count.rating,
       averageRating: avgRating._avg.rating
         ? Math.round(avgRating._avg.rating * 10) / 10
         : null,
     };
+  }
+
+  async importLibrary(
+    userId: string,
+    csvString: string,
+  ): Promise<{ imported: number; skipped: number }> {
+    const lines = csvString
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length < 2) return { imported: 0, skipped: 0 };
+
+    const headers = lines[0]
+      .split(',')
+      .map((h) => h.replace(/^"|"$/g, '').trim());
+    let imported = 0;
+    let skipped = 0;
+
+    for (const line of lines.slice(1)) {
+      try {
+        // Parse CSV row handling quoted values
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          if (line[i] === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (line[i] === ',' && !inQuotes) {
+            values.push(current);
+            current = '';
+          } else {
+            current += line[i];
+          }
+        }
+        values.push(current);
+
+        const row: Record<string, string> = {};
+        headers.forEach((h, i) => {
+          row[h] = values[i] ?? '';
+        });
+
+        const title = row['title']?.trim();
+        if (!title) {
+          skipped++;
+          continue;
+        }
+
+        // Find or create comic
+        let comic = row['isbn']
+          ? await this.prisma.comic.findFirst({ where: { isbn: row['isbn'] } })
+          : null;
+
+        if (!comic) {
+          const year = row['year'] ? parseInt(row['year'], 10) : undefined;
+          comic = await this.prisma.comic.create({
+            data: {
+              title,
+              issueNumber: row['issueNumber'] || undefined,
+              publisher: row['publisher'] || undefined,
+              year: year && !isNaN(year) ? year : undefined,
+              isbn: row['isbn'] || undefined,
+              binding:
+                (row['binding'] as import('@prisma/client').BindingFormat) ||
+                undefined,
+            },
+          });
+        }
+
+        // Upsert UserComic
+        const collectionStatus = Object.values(CollectionStatus).includes(
+          row['collectionStatus'] as CollectionStatus,
+        )
+          ? (row['collectionStatus'] as CollectionStatus)
+          : undefined;
+
+        const readStatus = Object.values(ReadStatus).includes(
+          row['readStatus'] as ReadStatus,
+        )
+          ? (row['readStatus'] as ReadStatus)
+          : undefined;
+
+        const rating = row['rating'] ? parseInt(row['rating'], 10) : undefined;
+
+        await this.prisma.userComic.upsert({
+          where: { userId_comicId: { userId, comicId: comic.id } },
+          create: {
+            userId,
+            comicId: comic.id,
+            collectionStatus:
+              collectionStatus ?? CollectionStatus.IN_COLLECTION,
+            readStatus,
+            rating: rating && !isNaN(rating) ? rating : undefined,
+            notes: row['notes'] || undefined,
+            loanedTo: row['loanedTo'] || undefined,
+          },
+          update: {
+            collectionStatus:
+              collectionStatus ?? CollectionStatus.IN_COLLECTION,
+            readStatus,
+            rating: rating && !isNaN(rating) ? rating : undefined,
+            notes: row['notes'] || undefined,
+          },
+        });
+        imported++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    return { imported, skipped };
   }
 }

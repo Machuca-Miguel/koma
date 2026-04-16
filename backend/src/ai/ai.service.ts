@@ -17,10 +17,13 @@ export class AiService {
   async getRecommendations(userId: string): Promise<Recommendation[]> {
     // Recoger contexto de la biblioteca del usuario
     const userComics = await this.prisma.userComic.findMany({
-      where: { userId, isOwned: true },
+      where: { userId, collectionStatus: 'IN_COLLECTION' },
       include: {
         comic: {
-          include: { tags: { include: { tag: true } } },
+          include: {
+            tags: { include: { tag: true } },
+            collectionSeries: true,
+          },
         },
       },
       take: 100,
@@ -35,7 +38,7 @@ export class AiService {
     const drawingStyleSet = new Set<string>();
 
     for (const { comic } of userComics) {
-      if (comic.series) seriesSet.add(comic.series);
+      if (comic.collectionSeries?.name) seriesSet.add(comic.collectionSeries.name);
       else seriesSet.add(comic.title);
       if (comic.publisher) publisherSet.add(comic.publisher);
       if (comic.drawingStyle) drawingStyleSet.add(comic.drawingStyle);

@@ -98,7 +98,7 @@ export function DashboardLayout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        <div className="px-8 pt-5 pb-0">
+        <div className="px-8 pt-5 pb-0 ">
           <Breadcrumbs />
         </div>
         <Outlet />

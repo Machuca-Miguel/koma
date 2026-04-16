@@ -9,7 +9,6 @@ export interface SeriesSummary {
   coverUrl?: string
   isOngoing: boolean
   totalIssues?: number
-  gcdSeriesId?: number
   comicCount: number
 }
 
@@ -17,10 +16,10 @@ export const seriesApi = {
   getAll: (params?: { q?: string }) =>
     api.get<SeriesSummary[]>('/series', { params }).then((r) => r.data),
 
-  create: (data: { name: string; publisher?: string; yearBegan?: number; yearEnded?: number; coverUrl?: string }) =>
+  create: (data: { name: string; publisher?: string; yearBegan?: number; yearEnded?: number; coverUrl?: string; totalIssues?: number }) =>
     api.post<SeriesSummary>('/series', data).then((r) => r.data),
 
-  update: (id: string, data: { name?: string; publisher?: string; yearBegan?: number; yearEnded?: number; coverUrl?: string }) =>
+  update: (id: string, data: { name?: string; publisher?: string; yearBegan?: number; yearEnded?: number; coverUrl?: string; totalIssues?: number; isOngoing?: boolean }) =>
     api.patch<SeriesSummary>(`/series/${id}`, data).then((r) => r.data),
 
   remove: (id: string) =>

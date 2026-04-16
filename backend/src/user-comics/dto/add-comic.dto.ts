@@ -1,37 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsString,
-  IsOptional,
-  IsInt,
-  Min,
-  Max,
-  IsBoolean,
-} from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsIn } from 'class-validator';
+import { CollectionStatus } from '@prisma/client';
 
 export class AddComicDto {
   @ApiProperty({ description: 'ID del cómic a agregar' })
   @IsString()
   comicId: string;
 
-  @ApiPropertyOptional({ default: true })
-  @IsBoolean()
+  @ApiPropertyOptional({
+    enum: CollectionStatus,
+    default: 'IN_COLLECTION',
+    description: 'Initial collection status (defaults to IN_COLLECTION)',
+  })
+  @IsIn(Object.values(CollectionStatus))
   @IsOptional()
-  isOwned?: boolean;
-
-  @ApiPropertyOptional({ default: false })
-  @IsBoolean()
-  @IsOptional()
-  isRead?: boolean;
-
-  @ApiPropertyOptional({ default: false })
-  @IsBoolean()
-  @IsOptional()
-  isWishlist?: boolean;
-
-  @ApiPropertyOptional({ default: false })
-  @IsBoolean()
-  @IsOptional()
-  isFavorite?: boolean;
+  collectionStatus?: CollectionStatus;
 
   @ApiPropertyOptional({ example: 4, minimum: 1, maximum: 5 })
   @IsInt()

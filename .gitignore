@@ -29,3 +29,6 @@ Thumbs.db
 # Claude Code (configuración local, no subir)
 .claude/
 CLAUDE.md
+
+# Obsidian (configuración local, no subir)
+.obsidian/

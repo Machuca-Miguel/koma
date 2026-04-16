@@ -11,6 +11,8 @@ import { CollectionDetailPage } from '@/pages/CollectionDetailPage'
 import { ComicDetailPage } from '@/pages/ComicDetailPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
+import { ExternalComicDetailPage } from '@/pages/ExternalComicDetailPage'
+import { SeriesDetailPage } from '@/pages/SeriesDetailPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -42,6 +44,8 @@ export function AppRouter() {
           <Route path="comics/:id" element={<ComicDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="discover" element={<DiscoverPage />} />
+          <Route path="search/book/:isbn" element={<ExternalComicDetailPage />} />
+          <Route path="series/:id" element={<SeriesDetailPage />} />
         </Route>
 
         {/* Fallback */}

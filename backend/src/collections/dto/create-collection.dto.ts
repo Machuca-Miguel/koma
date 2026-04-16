@@ -36,4 +36,5 @@ export class CreateCollectionDto {
   @Max(5)
   @IsOptional()
   rating?: number;
+
 }

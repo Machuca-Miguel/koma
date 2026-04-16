@@ -11,6 +11,9 @@ export const comicsApi = {
   getOne: (comicId: string) =>
     api.get<Comic>(`/comics/${comicId}`).then((r) => r.data),
 
+  findByIsbn: (isbn: string) =>
+    api.get<{ data: Comic[]; total: number }>('/comics', { params: { isbn } }).then((r) => r.data),
+
   create: (data: {
     title: string
     issueNumber?: string
@@ -22,6 +25,10 @@ export const comicsApi = {
     binding?: BindingFormat
     drawingStyle?: string
     series?: string
+    authors?: string
+    scriptwriter?: string
+    artist?: string
+    collectionSeriesId?: string
   }) => api.post<Comic>('/comics', data).then((r) => r.data),
 
   update: (comicId: string, data: {
@@ -35,7 +42,10 @@ export const comicsApi = {
     drawingStyle?: string
     series?: string
     authors?: string
+    scriptwriter?: string
+    artist?: string
     seriesId?: string | null
+    collectionSeriesId?: string | null
   }) => api.patch<Comic>(`/comics/${comicId}`, data).then((r) => r.data),
 
   getTags: () =>

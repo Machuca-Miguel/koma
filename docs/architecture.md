@@ -3,7 +3,7 @@
 ## Estructura de directorios
 
 ```
-comicvault/
+Koma/
 ├── backend/                    # NestJS API
 │   ├── prisma/
 │   │   ├── schema.prisma       # Modelos PostgreSQL

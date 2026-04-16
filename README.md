@@ -100,4 +100,4 @@ npm run build            # build de producción
 
 ## Repositorio
 
-[https://github.com/Machuca-Miguel/comicvault](https://github.com/Machuca-Miguel/koma)
+[https://github.com/Machuca-Miguel/Koma](https://github.com/Machuca-Miguel/koma)

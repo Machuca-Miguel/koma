@@ -9,4 +9,6 @@ export const usersApi = {
 
   updatePassword: (data: { currentPassword: string; newPassword: string }) =>
     api.patch<void>('/users/me/password', data),
+
+  deleteAccount: () => api.delete<void>('/users/me'),
 }

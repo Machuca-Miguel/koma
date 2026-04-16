@@ -8,8 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { ComicsModule } from './comics/comics.module';
 import { UserComicsModule } from './user-comics/user-comics.module';
 import { CollectionsModule } from './collections/collections.module';
-import { GcdModule } from './gcd/gcd.module';
-import { SeriesModule } from './series/series.module';
+import { CollectionSeriesModule } from './collection-series/collection-series.module';
 import { AiModule } from './ai/ai.module';
 import { IsbndbModule } from './isbndb/isbndb.module';
 
@@ -22,8 +21,7 @@ import { IsbndbModule } from './isbndb/isbndb.module';
     ComicsModule,
     UserComicsModule,
     CollectionsModule,
-    GcdModule,
-    SeriesModule,
+    CollectionSeriesModule,
     AiModule,
     IsbndbModule,
   ],

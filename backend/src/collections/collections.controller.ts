@@ -89,16 +89,6 @@ export class CollectionsController {
     return this.collectionsService.removeComic(id, req.user.id, comicId);
   }
 
-  @Patch(':id/comics/reorder')
-  @ApiOperation({ summary: 'Reordenar cómics de una colección' })
-  reorderComics(
-    @Request() req: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() body: { items: { comicId: string; position: number }[] },
-  ) {
-    return this.collectionsService.reorderComics(id, req.user.id, body.items);
-  }
-
   @Get(':id/suggestions')
   @ApiOperation({ summary: 'Sugerencias de cómics de la biblioteca para esta colección' })
   getSuggestions(@Request() req: AuthenticatedRequest, @Param('id') id: string) {

@@ -99,6 +99,10 @@ export class UsersService {
     });
   }
 
+  async deleteAccount(userId: string): Promise<void> {
+    await this.prisma.user.delete({ where: { id: userId } });
+  }
+
   async updatePassword(
     userId: string,
     currentPassword: string,

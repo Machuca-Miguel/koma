@@ -5,6 +5,9 @@ export const collectionsApi = {
   getAll: () =>
     api.get<Collection[]>('/collections').then((r) => r.data),
 
+  getByComic: (comicId: string) =>
+    api.get<{ id: string; name: string }[]>(`/comics/${comicId}/collections`).then((r) => r.data),
+
   getOne: (id: string) =>
     api.get<Collection>(`/collections/${id}`).then((r) => r.data),
 
@@ -25,9 +28,6 @@ export const collectionsApi = {
 
   removeComic: (collectionId: string, comicId: string) =>
     api.delete(`/collections/${collectionId}/comics/${comicId}`).then((r) => r.data),
-
-  reorderComics: (collectionId: string, items: { comicId: string; position: number }[]) =>
-    api.patch(`/collections/${collectionId}/comics/reorder`, { items }).then((r) => r.data),
 
   getSuggestions: (collectionId: string) =>
     api.get<CollectionSuggestion[]>(`/collections/${collectionId}/suggestions`).then((r) => r.data),

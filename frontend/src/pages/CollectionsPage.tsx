@@ -22,6 +22,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { EmptyState } from '@/components/ui/empty-state'
 import type { Collection } from '@/types'
 
 // ─── Star rating (display only) ──────────────────────────────────────────────
@@ -53,6 +55,7 @@ function CollectionDialog({ open, onClose, initial }: {
     name: z.string().min(1, t('collections.validation.nameRequired')).max(60, t('collections.validation.nameTooLong')),
     description: z.string().max(200, t('collections.validation.descTooLong')).optional(),
     isPublic: z.boolean(),
+    totalVolumes: z.coerce.number().int().min(1).optional().nullable(),
   })
   type CollectionForm = z.infer<typeof collectionSchema>
 
@@ -62,6 +65,7 @@ function CollectionDialog({ open, onClose, initial }: {
       name: initial?.name ?? '',
       description: initial?.description ?? '',
       isPublic: initial?.isPublic ?? false,
+      totalVolumes: initial?.totalVolumes ?? undefined,
     },
   })
 
@@ -69,8 +73,13 @@ function CollectionDialog({ open, onClose, initial }: {
   const isPublic = watch('isPublic')
 
   const mutation = useMutation({
-    mutationFn: (data: CollectionForm) =>
-      isEdit ? collectionsApi.update(initial!.id, data) : collectionsApi.create(data),
+    mutationFn: (data: CollectionForm) => {
+      const payload = {
+        ...data,
+        totalVolumes: data.totalVolumes ?? undefined,
+      }
+      return isEdit ? collectionsApi.update(initial!.id, payload) : collectionsApi.create(payload)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['collections'] })
       toast.success(isEdit ? t('collections.updateSuccess') : t('collections.createSuccess'))
@@ -99,6 +108,20 @@ function CollectionDialog({ open, onClose, initial }: {
             </Label>
             <Input id="col-desc" placeholder={t('collections.descPlaceholder')} {...register('description')} />
             {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="col-total-volumes">
+              {t('collections.totalVolumesLabel')}{' '}
+              <span className="text-muted-foreground">{t('collections.descOptional')}</span>
+            </Label>
+            <Input
+              id="col-total-volumes"
+              type="number"
+              min={1}
+              placeholder={t('collections.totalVolumesPlaceholder')}
+              {...register('totalVolumes')}
+            />
+            {errors.totalVolumes && <p className="text-xs text-destructive">{errors.totalVolumes.message}</p>}
           </div>
           <button
             type="button"
@@ -260,17 +283,16 @@ export function CollectionsPage() {
 
   return (
     <PageContainer>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">{t('collections.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('collections.subtitle')}</p>
-        </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2">
-          <Plus className="size-4" />
-          {t('collections.newCollection')}
-        </Button>
-      </div>
+      <PageHeader
+        title={t('collections.title')}
+        description={t('collections.subtitle')}
+        action={
+          <Button onClick={() => setDialogOpen(true)} className="gap-2">
+            <Plus className="size-4" />
+            {t('collections.newCollection')}
+          </Button>
+        }
+      />
 
       {/* Sort bar */}
       {!isLoading && (collections?.length ?? 0) > 1 && (
@@ -301,17 +323,17 @@ export function CollectionsPage() {
           {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
         </div>
       ) : !sorted.length ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="flex items-center justify-center size-16 rounded-2xl bg-muted mb-4">
-            <Folders className="size-8 text-muted-foreground" />
-          </div>
-          <p className="font-medium">{t('collections.emptyState')}</p>
-          <p className="text-sm text-muted-foreground mt-1">{t('collections.emptyStateHint')}</p>
-          <Button onClick={() => setDialogOpen(true)} className="mt-4 gap-2">
-            <Plus className="size-4" />
-            {t('collections.newCollection')}
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Folders className="size-8 text-muted-foreground" />}
+          title={t('collections.emptyState')}
+          description={t('collections.emptyStateHint')}
+          action={
+            <Button onClick={() => setDialogOpen(true)} className="gap-2">
+              <Plus className="size-4" />
+              {t('collections.newCollection')}
+            </Button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {sorted.map((col) => (

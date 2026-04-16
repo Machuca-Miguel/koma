@@ -160,10 +160,10 @@ export class IsbndbController {
     summary: 'Importar un libro de ISBNDB como cómic en la base de datos local',
   })
   async import(@Body() { book }: ImportIsbndbDto) {
-    const externalId = `isbndb-${book.isbn13 ?? book.isbn}`;
+    const isbn = book.isbn13 ?? book.isbn;
 
     const existing = await this.prisma.comic.findFirst({
-      where: { externalId, externalApi: 'isbndb' },
+      where: { isbn },
     });
     if (existing) return { comic: existing, imported: false };
 
@@ -179,20 +179,8 @@ export class IsbndbController {
         year,
         synopsis: book.synopsis ?? book.overview,
         coverUrl: book.image,
-        externalId,
-        externalApi: 'isbndb',
-        isbn: book.isbn13 ?? book.isbn,
-
+        isbn,
         authors: book.authors?.join(', ') || undefined,
-        metadata: {
-          authors: book.authors,
-          pageCount: book.pages,
-          subjects: book.subjects,
-          binding: book.binding,
-          language: book.language,
-          edition: book.edition,
-          titleLong: book.title_long,
-        },
       },
     });
 
