@@ -1,36 +1,17 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
-  ArrowDown01, ArrowDownAZ, ArrowLeft, ArrowRightLeft, ArrowUp01, ArrowUpAZ,
-  Bookmark, BookOpen, Check, Download, Eye,
-  Filter, Globe, GripVertical, Heart, Library, Lock, Pencil,
+  BookOpen, Check, Download,
+  Folders, Globe, Lock, Pencil,
   Plus, Search, Sparkles, Star, Trash2, X,
 } from 'lucide-react'
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { collectionsApi } from '@/api/collections'
-import { titleToColor } from '@/lib/colorHash'
 import { libraryApi } from '@/api/library'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
 import {
   Sheet,
   SheetContent,
@@ -49,52 +30,37 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PageContainer } from '@/components/layout/PageContainer'
+import { EmptyState } from '@/components/ui/empty-state'
+import type { Collection, CollectionComic, CollectionSeries } from '@/types'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { PageContainer } from '@/components/layout/PageContainer'
-import type { Collection, CollectionComic, CollectionComicUserStatus } from '@/types'
 
-// ─── Interactive star rating ──────────────────────────────────────────────────
+// ─── Star Rating Input ────────────────────────────────────────────────────────
 
-function StarRatingInput({ value, onChange }: { value?: number | null; onChange: (v: number) => void }) {
-  const [hovered, setHovered] = useState<number | null>(null)
-  const display = hovered ?? value ?? 0
+function StarRatingInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0)
   return (
-    <div className="flex items-center gap-0.5">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
         <button
-          key={i}
+          key={n}
           type="button"
-          onMouseEnter={() => setHovered(i + 1)}
-          onMouseLeave={() => setHovered(null)}
-          onClick={() => onChange(i + 1)}
-          className="p-0.5 rounded hover:scale-110 transition-transform"
+          onClick={() => onChange(n === value ? 0 : n)}
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(0)}
+          className="p-0.5"
         >
           <Star
             className={`size-5 transition-colors ${
-              i < display ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30 hover:text-amber-300'
+              n <= (hover || value) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'
             }`}
           />
         </button>
       ))}
-      {value && (
-        <button
-          type="button"
-          onClick={() => onChange(0)}
-          className="ml-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <X className="size-3" />
-        </button>
-      )}
     </div>
   )
 }
@@ -106,38 +72,62 @@ function EditCollectionDialog({ open, onClose, collection }: {
 }) {
   const qc = useQueryClient()
   const { t } = useTranslation()
+
   const schema = z.object({
-    name: z.string().min(1).max(100),
-    description: z.string().max(500).optional(),
+    name: z.string().min(1, t('collections.validation.nameRequired')).max(60, t('collections.validation.nameTooLong')),
+    description: z.string().max(200, t('collections.validation.descTooLong')).optional(),
     isPublic: z.boolean(),
+    rating: z.number().min(0).max(5).optional(),
   })
   type Form = z.infer<typeof schema>
-  const { register, handleSubmit, watch, setValue } = useForm<Form>({
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { name: collection.name, description: collection.description ?? '', isPublic: collection.isPublic },
+    defaultValues: {
+      name: collection.name,
+      description: collection.description ?? '',
+      isPublic: collection.isPublic,
+      rating: collection.rating ?? 0,
+    },
   })
+
+  // eslint-disable-next-line react-hooks/incompatible-library
   const isPublic = watch('isPublic')
+  const rating = watch('rating') ?? 0
+
   const mutation = useMutation({
-    mutationFn: (d: Form) => collectionsApi.update(collection.id, d),
+    mutationFn: (data: Form) => collectionsApi.update(collection.id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['collections'] })
       qc.invalidateQueries({ queryKey: ['collection', collection.id] })
+      qc.invalidateQueries({ queryKey: ['collections'] })
       toast.success(t('collections.updateSuccess'))
       onClose()
     },
+    onError: () => toast.error(t('collections.saveError')),
   })
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{t('collections.editTitle')}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{t('collections.editTitle')}</DialogTitle>
+        </DialogHeader>
         <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label>{t('collections.nameLabel')}</Label>
             <Input {...register('name')} />
+            {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>{t('collections.descLabel')}</Label>
+            <Label>
+              {t('collections.descLabel')}{' '}
+              <span className="text-muted-foreground">{t('collections.descOptional')}</span>
+            </Label>
             <Input {...register('description')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('collections.ratingLabel')}</Label>
+            <StarRatingInput value={rating} onChange={(v) => setValue('rating', v)} />
           </div>
           <button
             type="button"
@@ -156,9 +146,11 @@ function EditCollectionDialog({ open, onClose, collection }: {
               </p>
             </div>
           </button>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-            <Button type="submit" disabled={mutation.isPending}>{t('collections.saveChanges')}</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? t('collections.saving') : t('collections.saveChanges')}
+            </Button>
           </div>
         </form>
       </DialogContent>
@@ -166,433 +158,136 @@ function EditCollectionDialog({ open, onClose, collection }: {
   )
 }
 
-// ─── Interactive status badges + mini rating ─────────────────────────────────
+// ─── Comic Card ───────────────────────────────────────────────────────────────
 
-type StatusFlag = 'isOwned' | 'isRead' | 'isFavorite' | 'isWishlist' | 'isLoaned'
-
-const STATUS_FLAG_META: {
-  flag: StatusFlag
-  Icon: typeof Library
-  color: string
-  inactiveColor: string
-  i18nKey: string
-}[] = [
-  { flag: 'isOwned',    Icon: Library,        color: 'text-emerald-500', inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_owned'    },
-  { flag: 'isRead',     Icon: Eye,            color: 'text-blue-500',    inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_read'     },
-  { flag: 'isFavorite', Icon: Heart,          color: 'text-rose-500',    inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_favorite' },
-  { flag: 'isWishlist', Icon: Bookmark,       color: 'text-amber-500',   inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_wishlist' },
-  { flag: 'isLoaned',   Icon: ArrowRightLeft, color: 'text-orange-500',  inactiveColor: 'text-muted-foreground/30', i18nKey: 'collections.badge_loaned'   },
-]
-
-function InteractiveStatusBadges({
-  comicId,
-  status,
-  onToggle,
-}: {
-  comicId: string
-  status: CollectionComicUserStatus | null | undefined
-  onToggle: (comicId: string, flag: StatusFlag, current: boolean) => void
-}) {
-  const { t } = useTranslation()
-  return (
-    <TooltipProvider delayDuration={400}>
-      <div className="flex items-center gap-1">
-        {STATUS_FLAG_META.map(({ flag, Icon, color, inactiveColor, i18nKey }) => {
-          const active = status?.[flag] ?? false
-          return (
-            <Tooltip key={flag}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(comicId, flag, active) }}
-                  className="p-0.5 rounded transition-transform hover:scale-110"
-                >
-                  <Icon className={`size-3.5 transition-colors ${active ? color : inactiveColor}`} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {t(i18nKey)}
-              </TooltipContent>
-            </Tooltip>
-          )
-        })}
-      </div>
-    </TooltipProvider>
-  )
-}
-
-function MiniRating({ value }: { value?: number | null }) {
-  if (!value) return null
-  return (
-    <div className="flex items-center gap-px">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Star
-          key={i}
-          className={`size-2.5 ${i < value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/20'}`}
-        />
-      ))}
-    </div>
-  )
-}
-
-// ─── Sortable comic item ──────────────────────────────────────────────────────
-
-function SortableComicItem({
-  item,
-  index,
-  totalCount,
-  reordering,
-  onRemove,
-  isPendingRemove,
-  onReposition,
-  onStatusToggle,
-}: {
+function CollectionComicCard({ item, onRemove }: {
   item: CollectionComic
-  index: number
-  totalCount: number
-  reordering: boolean
   onRemove: (comicId: string) => void
-  isPendingRemove: boolean
-  onReposition: (comicId: string, newPos: number) => void
-  onStatusToggle: (comicId: string, flag: StatusFlag, current: boolean) => void
 }) {
   const { t } = useTranslation()
-  const [confirmRemove, setConfirmRemove] = useState(false)
-  const [posInput, setPosInput] = useState('')
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.comicId,
-    disabled: !reordering,
-  })
+  const comic = item.comic
+  const readStatus = item.userStatus?.readStatus
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
+  const badge =
+    readStatus === 'READ'
+      ? { label: t('status.READ'),    cls: 'bg-muted text-emerald-600 dark:text-emerald-400' }
+      : readStatus === 'READING'
+      ? { label: t('status.READING'), cls: 'bg-muted text-amber-600 dark:text-amber-400' }
+      : null
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-3 p-3 rounded-lg bg-muted/40 border border-transparent group/item transition-colors ${
-        isDragging ? 'border-primary/50 bg-primary/5 shadow-md' : ''
-      }`}
-    >
-      {/* Position badge / drag handle */}
-      {reordering ? (
-        <button
-          {...attributes}
-          {...listeners}
-          className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-        >
-          <GripVertical className="size-4" />
-        </button>
-      ) : (
-        <input
-          type="number"
-          value={posInput !== '' ? posInput : (item.position ?? index + 1)}
-          onChange={(e) => setPosInput(e.target.value)}
-          onFocus={(e) => { setPosInput(String(item.position ?? index + 1)); e.target.select() }}
-          onBlur={() => {
-            const n = parseInt(posInput)
-            if (!isNaN(n) && n >= 1 && n !== (item.position ?? index + 1)) {
-              onReposition(item.comicId, n)
-            }
-            setPosInput('')
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-            if (e.key === 'Escape') { setPosInput(''); (e.target as HTMLInputElement).blur() }
-          }}
-          className="shrink-0 w-9 h-7 text-center text-xs font-bold text-muted-foreground bg-transparent border border-transparent rounded hover:border-border focus:border-primary focus:outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          title={t('collections.positionHint')}
-        />
-      )}
-
-      {/* Cover */}
-      <Link to={`/comics/${item.comic.id}`} className="shrink-0">
-        <div className="size-10 rounded overflow-hidden bg-muted">
-          {item.comic.coverUrl
-            ? <img src={item.comic.coverUrl} alt={item.comic.title} className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center"><BookOpen className="size-4 text-muted-foreground/40" /></div>}
+    <article className="group relative bg-card overflow-hidden border border-border/10 hover:border-primary/40 transition-all duration-300 flex flex-col">
+      <Link to={`/comics/${comic.id}`} className="flex flex-col flex-1">
+        <div className="relative aspect-[2/3] overflow-hidden bg-muted">
+          {comic.coverUrl
+            ? <img src={comic.coverUrl} alt={comic.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+            : <div className="w-full h-full flex items-center justify-center">
+                <BookOpen className="size-6 text-muted-foreground/30" />
+              </div>
+          }
+          {badge && (
+            <span className={`absolute top-2 right-2 text-[0.6rem] font-bold px-2 pt-0.5 rounded-full uppercase backdrop-blur-sm ${badge.cls}`}>
+              {badge.label}
+            </span>
+          )}
+        </div>
+        <div className="p-3 flex flex-col flex-1 border-t border-border/10">
+          <h4 className="text-sm font-semibold leading-tight line-clamp-1 mb-2 flex-1 group-hover:text-primary transition-colors">
+            {comic.title}
+          </h4>
+          {comic.year && (
+            <span className="text-[0.65rem] text-muted-foreground">{comic.year}</span>
+          )}
         </div>
       </Link>
-
-      {/* Info */}
-      <Link to={`/comics/${item.comic.id}`} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
-        <p className="text-sm font-medium truncate">{item.comic.title}</p>
-        {(item.comic.issueNumber || item.comic.publisher || item.comic.year) && (
-          <p className="text-xs text-muted-foreground truncate">
-            {[
-              item.comic.issueNumber && `#${item.comic.issueNumber}`,
-              item.comic.publisher,
-              item.comic.year,
-            ].filter(Boolean).join(' · ')}
-          </p>
-        )}
-        {item.comic.drawingStyle && (
-          <p className="text-xs text-muted-foreground/70 italic truncate">{item.comic.drawingStyle}</p>
-        )}
-        <div className="flex items-center gap-2 mt-0.5">
-          <InteractiveStatusBadges
-            comicId={item.comicId}
-            status={item.userStatus}
-            onToggle={onStatusToggle}
-          />
-          <MiniRating value={item.userStatus?.rating} />
-        </div>
-      </Link>
-
-      {/* Remove */}
-      {!reordering && (
-        confirmRemove ? (
-          <Button
-            variant="ghost" size="icon"
-            className="size-8 shrink-0 text-destructive hover:text-destructive"
-            onClick={() => { onRemove(item.comicId); setConfirmRemove(false) }}
-            disabled={isPendingRemove}
-          >
-            <Check className="size-3.5" />
-          </Button>
-        ) : (
-          <Button
-            variant="ghost" size="icon"
-            className="size-8 shrink-0 text-muted-foreground hover:text-destructive sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity"
-            onClick={() => setConfirmRemove(true)}
-          >
-            <X className="size-3.5" />
-          </Button>
-        )
-      )}
-    </div>
+      <button
+        onClick={(e) => { e.preventDefault(); onRemove(comic.id) }}
+        className="absolute top-1.5 left-1.5 size-6 rounded-full bg-background/80 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        title={t('collections.removeComic')}
+      >
+        <X className="size-3" />
+      </button>
+    </article>
   )
 }
 
-// ─── Add Comics Sheet (multi-select) ─────────────────────────────────────────
-
-type AddAction = 'current' | 'other' | 'new'
+// ─── Add Comics Sheet ─────────────────────────────────────────────────────────
 
 function AddComicsSheet({ open, onClose, collectionId, existingIds }: {
-  open: boolean; onClose: () => void; collectionId: string; existingIds: Set<string>
+  open: boolean
+  onClose: () => void
+  collectionId: string
+  existingIds: Set<string>
 }) {
-  const qc = useQueryClient()
   const { t } = useTranslation()
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [action, setAction] = useState<AddAction>('current')
-  const [targetCollectionId, setTargetCollectionId] = useState('')
-  const [newColName, setNewColName] = useState('')
-  const [committing, setCommitting] = useState(false)
 
-  function resetAndClose() {
-    setSearch(''); setSelected(new Set()); setAction('current')
-    setTargetCollectionId(''); setNewColName('')
-    onClose()
-  }
-
-  const { data: library } = useQuery({
-    queryKey: ['library', 'ALL', 1],
+  const { data: libraryPage } = useQuery({
+    queryKey: ['library-all'],
     queryFn: () => libraryApi.getAll({ limit: 500 }),
     enabled: open,
   })
 
-  const { data: allCollections } = useQuery({
-    queryKey: ['collections'],
-    queryFn: collectionsApi.getAll,
-    enabled: open && action === 'other',
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return (libraryPage?.data ?? []).filter(
+      (uc) => !existingIds.has(uc.comic.id) && uc.comic.title.toLowerCase().includes(q),
+    )
+  }, [libraryPage, existingIds, search])
+
+  const addMutation = useMutation({
+    mutationFn: (comicId: string) => collectionsApi.addComic(collectionId, comicId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collection-comics', collectionId] }),
+    onError: () => toast.error(t('collections.addComicError')),
   })
 
-  const otherCollections = allCollections?.filter((c) => c.id !== collectionId) ?? []
-
-  const available = useMemo(() => {
-    const all = library?.data.filter((uc) => !existingIds.has(uc.comic.id)) ?? []
-    if (!search.trim()) return all
-    const q = search.toLowerCase()
-    return all.filter((uc) =>
-      uc.comic.title.toLowerCase().includes(q) ||
-      uc.comic.series?.toLowerCase().includes(q) ||
-      uc.comic.publisher?.toLowerCase().includes(q),
-    )
-  }, [library, existingIds, search])
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  function toggleAll() {
-    if (selected.size === available.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(available.map((uc) => uc.comic.id)))
-    }
-  }
-
-  async function commit() {
-    if (selected.size === 0) return
-    setCommitting(true)
-    try {
-      let targetId = collectionId
-      if (action === 'other') {
-        if (!targetCollectionId) return
-        targetId = targetCollectionId
-      } else if (action === 'new') {
-        if (!newColName.trim()) return
-        const col = await collectionsApi.create({ name: newColName.trim(), isPublic: false })
-        targetId = col.id
-        qc.invalidateQueries({ queryKey: ['collections'] })
-      }
-      await Promise.all([...selected].map((id) => collectionsApi.addComic(targetId, id)))
-      qc.invalidateQueries({ queryKey: ['collection-comics', targetId] })
-      qc.invalidateQueries({ queryKey: ['collection', targetId] })
-      qc.invalidateQueries({ queryKey: ['collections'] })
-      toast.success(t('collections.addMultipleSuccess', { count: selected.size }))
-      resetAndClose()
-    } catch {
-      toast.error(t('collections.addComicError'))
-    } finally {
-      setCommitting(false)
-    }
-  }
-
   return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) resetAndClose() }}>
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
-        <SheetHeader className="p-5 pb-3 border-b">
-          <SheetTitle>{t('collections.addComicTitle')}</SheetTitle>
+        <SheetHeader className="px-6 py-4 border-b">
+          <SheetTitle>{t('collections.addComics')}</SheetTitle>
         </SheetHeader>
-
-        {/* Search + select all */}
-        <div className="px-5 py-3 border-b space-y-2">
-          <Input
-            placeholder={t('common.search') + '…'}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {available.length > 0 && (
-            <button
-              onClick={toggleAll}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {selected.size === available.length
-                ? t('collections.deselectAll')
-                : t('collections.selectAll', { count: available.length })}
-            </button>
-          )}
-        </div>
-
-        {/* Comic list */}
-        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1.5">
-          {available.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              {search ? t('common.noResults') : t('collections.allComicsAdded')}
-            </p>
-          ) : (
-            available.map(({ comic }) => {
-              const isSelected = selected.has(comic.id)
-              return (
-                <button
-                  key={comic.id}
-                  onClick={() => toggle(comic.id)}
-                  className={`w-full flex items-center gap-3 p-2.5 rounded-lg border text-left transition-colors ${
-                    isSelected ? 'border-primary bg-primary/5' : 'border-border bg-card hover:bg-muted/40'
-                  }`}
-                >
-                  {/* Checkbox indicator */}
-                  <div className={`shrink-0 size-4 rounded border-2 flex items-center justify-center transition-colors ${
-                    isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40'
-                  }`}>
-                    {isSelected && <Check className="size-2.5 text-primary-foreground" />}
-                  </div>
-                  <div className="size-9 rounded overflow-hidden bg-muted shrink-0">
-                    {comic.coverUrl
-                      ? <img src={comic.coverUrl} alt={comic.title} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center"><BookOpen className="size-3.5 text-muted-foreground/40" /></div>}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{comic.title}</p>
-                    {(comic.series || comic.publisher) && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {[comic.series, comic.publisher].filter(Boolean).join(' · ')}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              )
-            })
-          )}
-        </div>
-
-        {/* Action bar — only shown when something is selected */}
-        {selected.size > 0 && (
-          <div className="border-t p-4 space-y-3 bg-muted/30">
-            <p className="text-sm font-medium">{t('collections.selectedCount', { count: selected.size })}</p>
-
-            {/* Destination selector */}
-            <div className="grid grid-cols-3 gap-1.5 text-xs">
-              {(['current', 'other', 'new'] as AddAction[]).map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAction(a)}
-                  className={`chip-sort border ${action === a ? 'border-primary chip-active' : 'border-border chip-inactive bg-background hover:bg-muted'}`}
-                >
-                  {t(`collections.actionDest_${a}`)}
-                </button>
-              ))}
-            </div>
-
-            {/* Other collection picker */}
-            {action === 'other' && (
-              <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                {otherCollections.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">{t('collections.noOtherCollections')}</p>
-                ) : (
-                  otherCollections.map((col) => (
-                    <button
-                      key={col.id}
-                      onClick={() => setTargetCollectionId(col.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm border transition-colors ${
-                        targetCollectionId === col.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
-                      }`}
-                    >
-                      {col.name}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* New collection name */}
-            {action === 'new' && (
-              <Input
-                placeholder={t('collections.newCollectionName')}
-                value={newColName}
-                onChange={(e) => setNewColName(e.target.value)}
-                className="h-8 text-sm"
-              />
-            )}
-
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={resetAndClose}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                className="flex-1"
-                disabled={
-                  committing ||
-                  (action === 'other' && !targetCollectionId) ||
-                  (action === 'new' && !newColName.trim())
-                }
-                onClick={commit}
-              >
-                {committing ? t('common.saving') : t('collections.confirmAdd', { count: selected.size })}
-              </Button>
-            </div>
+        <div className="px-4 py-3 border-b">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              className="w-full pl-9 pr-3 py-2 text-sm bg-muted rounded-md outline-none focus:ring-1 focus:ring-primary"
+              placeholder={t('collections.searchLibrary')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-        )}
+        </div>
+        <div className="flex-1 overflow-y-auto divide-y divide-border/50">
+          {filtered.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-12">{t('common.noResults')}</p>
+          ) : filtered.map((uc) => (
+            <div key={uc.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="size-10 rounded overflow-hidden bg-muted shrink-0">
+                {uc.comic.coverUrl
+                  ? <img src={uc.comic.coverUrl} alt="" className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center">
+                      <BookOpen className="size-4 text-muted-foreground/40" />
+                    </div>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium line-clamp-1">{uc.comic.title}</p>
+                <p className="text-xs text-muted-foreground">{uc.comic.publisher} · {uc.comic.year}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                disabled={addMutation.isPending}
+                onClick={() => addMutation.mutate(uc.comic.id)}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
       </SheetContent>
     </Sheet>
   )
@@ -601,11 +296,13 @@ function AddComicsSheet({ open, onClose, collectionId, existingIds }: {
 // ─── Suggestions Sheet ────────────────────────────────────────────────────────
 
 function SuggestionsSheet({ open, onClose, collectionId, existingIds }: {
-  open: boolean; onClose: () => void; collectionId: string; existingIds: Set<string>
+  open: boolean
+  onClose: () => void
+  collectionId: string
+  existingIds: Set<string>
 }) {
-  const qc = useQueryClient()
   const { t } = useTranslation()
-  const [added, setAdded] = useState<Set<string>>(new Set())
+  const qc = useQueryClient()
 
   const { data: suggestions, isLoading } = useQuery({
     queryKey: ['collection-suggestions', collectionId],
@@ -615,59 +312,55 @@ function SuggestionsSheet({ open, onClose, collectionId, existingIds }: {
 
   const addMutation = useMutation({
     mutationFn: (comicId: string) => collectionsApi.addComic(collectionId, comicId),
-    onSuccess: (_, comicId) => {
-      setAdded((prev) => new Set(prev).add(comicId))
-      qc.invalidateQueries({ queryKey: ['collection-comics', collectionId] })
-      qc.invalidateQueries({ queryKey: ['collection', collectionId] })
-      qc.invalidateQueries({ queryKey: ['collections'] })
-      toast.success(t('collections.addComicSuccess'))
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collection-comics', collectionId] }),
+    onError: () => toast.error(t('collections.addComicError')),
   })
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
-        <SheetHeader className="p-6 pb-4">
+        <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
             {t('collections.suggestions')}
           </SheetTitle>
         </SheetHeader>
-        <p className="px-6 pb-4 text-sm text-muted-foreground">{t('collections.suggestionsHint')}</p>
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
+        <div className="flex-1 overflow-y-auto divide-y divide-border/50">
           {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-md" />)}
+            </div>
           ) : !suggestions?.length ? (
-            <p className="text-sm text-muted-foreground text-center py-8">{t('collections.suggestionsEmpty')}</p>
-          ) : (
-            suggestions.map(({ comicId, comic }) => {
-              const isAdded = existingIds.has(comicId) || added.has(comicId)
-              return (
-                <div key={comicId} className="flex items-center gap-3 p-2.5 rounded-lg border bg-card">
-                  <div className="size-9 rounded overflow-hidden bg-muted shrink-0">
-                    {comic.coverUrl
-                      ? <img src={comic.coverUrl} alt={comic.title} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center"><BookOpen className="size-4 text-muted-foreground/40" /></div>}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{comic.title}</p>
-                    {(comic.series || comic.publisher) && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {[comic.series, comic.publisher].filter(Boolean).join(' · ')}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    size="sm" variant={isAdded ? 'secondary' : 'default'}
-                    className="h-7 text-xs gap-1 shrink-0"
-                    disabled={isAdded} onClick={() => addMutation.mutate(comicId)}
-                  >
-                    {isAdded ? <><Check className="size-3" />{t('common.added')}</> : <><Plus className="size-3" />{t('common.add')}</>}
-                  </Button>
-                </div>
-              )
-            })
-          )}
+            <p className="text-center text-sm text-muted-foreground py-12">{t('collections.suggestionsEmpty')}</p>
+          ) : suggestions.map((s) => (
+            <div key={s.comicId} className="flex items-center gap-3 px-4 py-3">
+              <div className="size-10 rounded overflow-hidden bg-muted shrink-0">
+                {s.comic.coverUrl
+                  ? <img src={s.comic.coverUrl} alt="" className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center">
+                      <BookOpen className="size-4 text-muted-foreground/40" />
+                    </div>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium line-clamp-1">{s.comic.title}</p>
+                <p className="text-xs text-muted-foreground">{s.comic.publisher} · {s.comic.year}</p>
+              </div>
+              {existingIds.has(s.comicId) ? (
+                <Check className="size-4 text-emerald-500 shrink-0" />
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  disabled={addMutation.isPending}
+                  onClick={() => addMutation.mutate(s.comicId)}
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
         </div>
       </SheetContent>
     </Sheet>
@@ -676,78 +369,98 @@ function SuggestionsSheet({ open, onClose, collectionId, existingIds }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type AutoSortField = 'title' | 'year' | 'issue'
-type StatusFilterKey = 'owned' | 'read' | 'wishlist' | 'loaned'
-
 export function CollectionDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const { t } = useTranslation()
+  const qc = useQueryClient()
+
   const [editOpen, setEditOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [suggestOpen, setSuggestOpen] = useState(false)
-  const [reordering, setReordering] = useState(false)
-  const [localOrder, setLocalOrder] = useState<CollectionComic[] | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  // A2 — search + status filter
   const [internalSearch, setInternalSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilterKey | null>(null)
-  // A3 — auto-sort
-  const [autoSortField, setAutoSortField] = useState<AutoSortField | null>(null)
-  const [autoSortDir, setAutoSortDir] = useState<'asc' | 'desc'>('asc')
-  // B1 — export
+  const [seriesFilter, setSeriesFilter] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [cols, setCols] = useState(6)
 
-  const { data: collection, isLoading: loadingCol } = useQuery({
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width
+      if (w < 640) setCols(2)
+      else if (w < 768) setCols(3)
+      else if (w < 1024) setCols(4)
+      else if (w < 1280) setCols(5)
+      else setCols(6)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const { data: collection, isLoading: loadingCol } = useQuery<Collection>({
     queryKey: ['collection', id],
     queryFn: () => collectionsApi.getOne(id!),
     enabled: !!id,
   })
 
-  const { data: comics, isLoading: loadingComics } = useQuery({
+  const { data: comics, isLoading: loadingComics } = useQuery<CollectionComic[]>({
     queryKey: ['collection-comics', id],
     queryFn: () => collectionsApi.getComics(id!),
     enabled: !!id,
   })
 
-  // Base order: local drag order > server order
-  const displayComics = localOrder ?? comics ?? []
-  const existingIds = useMemo(() => new Set(displayComics.map((c) => c.comicId)), [displayComics])
+  const allComics = useMemo(() => comics ?? [], [comics])
+  const existingIds = useMemo(() => new Set(allComics.map((c) => c.comic.id)), [allComics])
 
-  // A2 — filtered view (never affects saved order)
+  const seriesOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    allComics.forEach((c) => {
+      const s = c.comic.collectionSeries
+      if (s) map.set(s.id, s.name)
+    })
+    return Array.from(map.entries()).map(([sid, name]) => ({ id: sid, name }))
+  }, [allComics])
+
   const filteredComics = useMemo(() => {
-    let list = displayComics
-    const q = internalSearch.trim().toLowerCase()
-    if (q) {
-      list = list.filter((item) =>
-        item.comic.title.toLowerCase().includes(q) ||
-        item.comic.series?.toLowerCase().includes(q) ||
-        item.comic.publisher?.toLowerCase().includes(q),
-      )
-    }
-    if (statusFilter) {
-      list = list.filter((item) => {
-        const s = item.userStatus
-        if (!s) return false
-        if (statusFilter === 'owned') return s.isOwned
-        if (statusFilter === 'read') return s.isRead
-        if (statusFilter === 'wishlist') return s.isWishlist
-        if (statusFilter === 'loaned') return s.isLoaned
-        return true
-      })
-    }
-    return list
-  }, [displayComics, internalSearch, statusFilter])
+    const q = internalSearch.toLowerCase()
+    return allComics.filter((c) => {
+      const matchSearch = !q || c.comic.title.toLowerCase().includes(q)
+      const matchSeries = !seriesFilter
+        || (seriesFilter === '__unsorted__'
+          ? !c.comic.collectionSeriesId
+          : c.comic.collectionSeriesId === seriesFilter)
+      return matchSearch && matchSeries
+    })
+  }, [allComics, internalSearch, seriesFilter])
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, { series: CollectionSeries | null; items: CollectionComic[] }>()
+    filteredComics.forEach((item) => {
+      const key = item.comic.collectionSeriesId ?? '__unsorted__'
+      if (!map.has(key)) {
+        map.set(key, { series: item.comic.collectionSeries ?? null, items: [] })
+      }
+      map.get(key)!.items.push(item)
+    })
+    const result = Array.from(map.entries()).map(([key, { series, items }]) => ({ key, series, items }))
+    result.sort((a, b) => {
+      if (a.key === '__unsorted__') return 1
+      if (b.key === '__unsorted__') return -1
+      if (a.series?.isDefault && !b.series?.isDefault) return -1
+      if (!a.series?.isDefault && b.series?.isDefault) return 1
+      return (a.series?.name ?? '').localeCompare(b.series?.name ?? '')
+    })
+    return result
+  }, [filteredComics])
 
   const removeMutation = useMutation({
     mutationFn: (comicId: string) => collectionsApi.removeComic(id!, comicId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['collection-comics', id] })
-      qc.invalidateQueries({ queryKey: ['collection', id] })
-      qc.invalidateQueries({ queryKey: ['collections'] })
       toast.success(t('collections.removeComicSuccess'))
     },
     onError: () => toast.error(t('collections.removeComicError')),
@@ -763,114 +476,15 @@ export function CollectionDetailPage() {
     onError: () => toast.error(t('collections.deleteError')),
   })
 
-  const ratingMutation = useMutation({
-    mutationFn: (rating: number) => collectionsApi.update(id!, { rating: rating || undefined }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['collection', id] })
-      qc.invalidateQueries({ queryKey: ['collections'] })
-    },
-  })
-
-  const reorderMutation = useMutation({
-    mutationFn: (items: { comicId: string; position: number }[]) =>
-      collectionsApi.reorderComics(id!, items),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['collection-comics', id] })
-      toast.success(t('collections.reorderSuccess'))
-    },
-    onError: () => toast.error(t('collections.reorderError')),
-  })
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const current = localOrder ?? comics ?? []
-    const oldIndex = current.findIndex((c) => c.comicId === active.id)
-    const newIndex = current.findIndex((c) => c.comicId === over.id)
-    setLocalOrder(arrayMove(current, oldIndex, newIndex))
-  }
-
-  function saveReorder() {
-    if (!localOrder) return
-    const items = localOrder.map((c, i) => ({ comicId: c.comicId, position: i + 1 }))
-    reorderMutation.mutate(items)
-    setReordering(false)
-    setLocalOrder(null)
-  }
-
-  function handleReposition(comicId: string, newPos: number) {
-    const current = localOrder ?? comics ?? []
-    // Assign the exact typed position to this comic; keep all others at their current position
-    const updated = current.map((c, i) => ({
-      ...c,
-      position: c.comicId === comicId ? newPos : (c.position ?? i + 1),
-    }))
-    // Re-sort display order by position value (ascending)
-    const reindexed = [...updated].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-    const items = reindexed.map((c) => ({ comicId: c.comicId, position: c.position ?? 1 }))
-    setLocalOrder(reindexed)
-    reorderMutation.mutate(items)
-  }
-
-  function cancelReorder() {
-    setLocalOrder(null)
-    setReordering(false)
-  }
-
-  const statusToggleMutation = useMutation({
-    mutationFn: ({ comicId, updates }: { comicId: string; updates: Record<string, boolean> }) =>
-      libraryApi.update(comicId, updates),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['collection-comics', id] })
-    },
-    onError: () => toast.error(t('collections.updateStatusError')),
-  })
-
-  function handleStatusToggle(comicId: string, flag: StatusFlag, current: boolean) {
-    const updates: Record<string, boolean> = { [flag]: !current }
-    // isOwned and isWishlist are mutually exclusive
-    if (!current) {
-      if (flag === 'isOwned') updates.isWishlist = false
-      if (flag === 'isWishlist') updates.isOwned = false
-    }
-    statusToggleMutation.mutate({ comicId, updates })
-  }
-
-  // A3 — auto-sort: calculates order and persists it via reorderComics
-  function applyAutoSort(field: AutoSortField, dir: 'asc' | 'desc') {
-    const base = comics ?? []
-    const d = dir === 'asc' ? 1 : -1
-    const sorted = [...base].sort((a, b) => {
-      if (field === 'year') return d * ((a.comic.year ?? 0) - (b.comic.year ?? 0))
-      if (field === 'title') return d * (a.comic.title ?? '').localeCompare(b.comic.title ?? '')
-      if (field === 'issue') {
-        const ai = parseFloat(a.comic.issueNumber ?? '0') || 0
-        const bi = parseFloat(b.comic.issueNumber ?? '0') || 0
-        return d * (ai - bi)
-      }
-      return 0
-    })
-    const items = sorted.map((c, i) => ({ comicId: c.comicId, position: i + 1 }))
-    reorderMutation.mutate(items)
-    setAutoSortField(field)
-    setAutoSortDir(dir)
-  }
-
-  function handleAutoSortClick(field: AutoSortField) {
-    const newDir = autoSortField === field && autoSortDir === 'asc' ? 'desc' : 'asc'
-    applyAutoSort(field, newDir)
-  }
-
-  // B1 — export
   async function handleExport(format: 'csv' | 'json') {
+    if (!id) return
     setExporting(true)
     try {
-      const data = await collectionsApi.exportCollection(id!, format)
-      const blob = format === 'csv' ? data : new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const blob = await collectionsApi.exportCollection(id, format)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${collection?.name ?? 'collection'}.${format}`
+      a.download = `collection-${id}.${format}`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -880,263 +494,259 @@ export function CollectionDetailPage() {
     }
   }
 
-  const color = collection ? titleToColor(collection.name) : '#6366f1'
-
   if (loadingCol) {
     return (
-      <PageContainer size="narrow" className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
+      <PageContainer>
+        <div className="space-y-4">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        </div>
       </PageContainer>
     )
   }
 
   if (!collection) {
     return (
-      <PageContainer size="narrow" className="text-center text-muted-foreground">
-        <p>{t('collections.notFound')}</p>
-        <Button variant="link" onClick={() => navigate('/collections')}>{t('collections.backToList')}</Button>
+      <PageContainer>
+        <EmptyState
+          icon={<Folders className="size-8 text-muted-foreground" />}
+          title={t('collections.notFound')}
+          action={<Button onClick={() => navigate('/collections')}>{t('common.back')}</Button>}
+        />
       </PageContainer>
     )
   }
 
-  const yearLabel = collection.yearRange
-    ? collection.yearRange.min === collection.yearRange.max
-      ? String(collection.yearRange.min)
-      : `${collection.yearRange.min} – ${collection.yearRange.max}`
-    : null
+  const comicCount = collection._count?.comics ?? allComics.length
+  const seriesCount = collection._count?.series ?? seriesOptions.length
+
+  const bentoStats: { label: string; value: string | number; isRating?: boolean }[] = [
+    { label: t('collections.seriesLabel'), value: seriesCount },
+    { label: t('collections.issuesLabel'), value: comicCount },
+    { label: t('collections.ratingLabel'), value: collection.rating ?? 0, isRating: true },
+    { label: t('collections.yearRange'), value: collection.yearRange ? `${collection.yearRange.min}–${collection.yearRange.max}` : '—' },
+  ]
 
   return (
-    <PageContainer size="narrow">
-      {/* Back */}
-      <button
-        onClick={() => navigate('/collections')}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="size-4" />
-        {t('collections.backToList')}
-      </button>
+    <PageContainer>
+   
 
-      {/* Header card */}
-      <Card className="mb-6 overflow-hidden">
-        <div className="h-2" style={{ backgroundColor: color }} />
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div
-                className="flex items-center justify-center size-14 rounded-2xl shrink-0"
-                style={{ backgroundColor: `${color}26` }}
-              >
-                <span className="text-2xl font-bold" style={{ color }}>
-                  {collection.name[0].toUpperCase()}
-                </span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold leading-tight">{collection.name}</h1>
-                {collection.description && (
-                  <p className="text-muted-foreground mt-1 text-sm">{collection.description}</p>
-                )}
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    {collection.isPublic
-                      ? <><Globe className="size-3" />{t('collections.public')}</>
-                      : <><Lock className="size-3" />{t('collections.private')}</>}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {t('collections.comicCount', { count: collection._count?.comics ?? 0 })}
-                  </span>
-                  {yearLabel && <span className="text-xs text-muted-foreground">{yearLabel}</span>}
-                </div>
-                {/* Rating */}
-                <div className="mt-3">
-                  <StarRatingInput
-                    value={collection.rating}
-                    onChange={(v) => ratingMutation.mutate(v)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-1 shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" disabled={exporting}>
-                    <Download className="size-3.5" />
-                    {t('collections.export')}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleExport('csv')}>
-                    {t('collections.exportCsv')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('json')}>
-                    {t('collections.exportJson')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button variant="ghost" size="icon" className="size-8" onClick={() => setEditOpen(true)}>
-                <Pencil className="size-4" />
-              </Button>
-              {confirmDelete ? (
-                <Button
-                  variant="ghost" size="icon"
-                  className="size-8 text-destructive hover:text-destructive"
-                  onClick={() => deleteMutation.mutate()}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Check className="size-4" />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost" size="icon"
-                  className="size-8 text-muted-foreground hover:text-destructive"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Comics section */}
-      <div className="space-y-4">
-        {/* Section header */}
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">{t('collections.comicsInCollection')}</h2>
-          <div className="flex items-center gap-2">
-            {reordering ? (
-              <>
-                <Button variant="outline" size="sm" onClick={cancelReorder}>
-                  {t('common.cancel')}
-                </Button>
-                <Button size="sm" onClick={saveReorder} disabled={reorderMutation.isPending}>
-                  <Check className="size-3 mr-1" />{t('common.save')}
-                </Button>
-              </>
-            ) : (
-              <>
-                {(displayComics.length > 1) && (
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setLocalOrder(comics ?? []); setReordering(true) }}>
-                    <GripVertical className="size-3.5" />
-                    {t('collections.reorder')}
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setSuggestOpen(true)}>
-                  <Sparkles className="size-3.5" />
-                  {t('collections.suggestions')}
-                </Button>
-                <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
-                  <Plus className="size-3.5" />
-                  {t('collections.addComic')}
-                </Button>
-              </>
-            )}
-          </div>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          {collection.isPublic
+            ? <Globe className="size-5 text-muted-foreground shrink-0" />
+            : <Lock className="size-5 text-muted-foreground shrink-0" />}
+          <h1 className="text-3xl font-bold tracking-tight truncate">{collection.name}</h1>
         </div>
-
-        {/* A3 — Auto-sort chips (only when not reordering and >1 comic) */}
-        {!reordering && displayComics.length > 1 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
-              <Filter className="size-3" />{t('library.sortBy')}:
-            </span>
-            {(['title', 'year', 'issue'] as AutoSortField[]).map((field) => {
-              const isActive = autoSortField === field
-              const Icon = field === 'year'
-                ? (autoSortDir === 'asc' ? ArrowDown01 : ArrowUp01)
-                : (autoSortDir === 'asc' ? ArrowDownAZ : ArrowUpAZ)
-              return (
-                <button
-                  key={field}
-                  onClick={() => handleAutoSortClick(field)}
-                  disabled={reorderMutation.isPending}
-                  className={`chip-sort disabled:opacity-50 ${isActive ? 'chip-active' : 'chip-inactive'}`}
-                >
-                  {t(`collections.autoSort_${field}`)}
-                  {isActive && <Icon className="size-3" />}
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        {/* A2 — Internal search + status filter chips */}
-        {!reordering && displayComics.length > 0 && (
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                className="pl-8 h-8 text-sm"
-                placeholder={t('collections.searchInCollection')}
-                value={internalSearch}
-                onChange={(e) => setInternalSearch(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {(['owned', 'read', 'wishlist', 'loaned'] as StatusFilterKey[]).map((key) => (
-                <button
-                  key={key}
-                  onClick={() => setStatusFilter(statusFilter === key ? null : key)}
-                  className={`chip-sort ${statusFilter === key ? 'chip-active' : 'chip-inactive'}`}
-                >
-                  {t(`collections.filter_${key}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Comics list */}
-        {loadingComics ? (
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
-          </div>
-        ) : displayComics.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground border rounded-xl border-dashed">
-            <BookOpen className="size-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">{t('collections.emptyCollection')}</p>
-            <Button variant="link" size="sm" onClick={() => setAddOpen(true)}>
-              {t('collections.addComic')}
-            </Button>
-          </div>
-        ) : filteredComics.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground">
-            <p className="text-sm">{t('common.noResults')}</p>
-          </div>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext
-              items={displayComics.map((c) => c.comicId)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-2">
-                {(reordering ? displayComics : filteredComics).map((item, i) => (
-                  <SortableComicItem
-                    key={item.comicId}
-                    item={item}
-                    index={i}
-                    totalCount={displayComics.length}
-                    reordering={reordering}
-                    onRemove={(comicId) => removeMutation.mutate(comicId)}
-                    isPendingRemove={removeMutation.isPending}
-                    onReposition={handleReposition}
-                    onStatusToggle={handleStatusToggle}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
+            <Pencil className="size-3.5" />
+            {t('common.edit')}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium shadow-sm hover:bg-accent focus-visible:outline-none disabled:opacity-50" disabled={exporting}>
+              <Download className="size-3.5" />
+              {t('collections.export')}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('json')}>JSON</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="destructive"  onClick={() => setConfirmDelete(true)}>
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
       </div>
 
-      {/* Modals / Sheets */}
+      {/* Bento stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        {bentoStats.map(({ label, value, isRating }) => (
+          <div key={label} className="bg-card rounded-xl border border-border/40 px-4 py-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">{label}</p>
+            {isRating ? (
+              (value as number) > 0 ? (
+                <div className="flex items-center gap-0.5 mt-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`size-4 ${i < (value as number) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/20'}`}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xl font-bold">—</p>
+              )
+            ) : (
+              <p className="text-xl font-bold tabular-nums">{value}</p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Controls bar */}
+      <div className="flex flex-col gap-3 mb-6">
+        {/* Row 1: search + action buttons */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="relative flex-1 min-w-0 w-full sm:w-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              className="w-full pl-9 pr-3 py-2 text-sm bg-muted rounded-md outline-none focus:ring-1 focus:ring-primary"
+              placeholder={t('collections.searchComics')}
+              value={internalSearch}
+              onChange={(e) => setInternalSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => setSuggestOpen(true)} className="gap-1.5">
+              <Sparkles className="size-3.5" />
+              {t('collections.suggestions')}
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+              <Plus className="size-3.5" />
+              {t('collections.addComics')}
+            </Button>
+          </div>
+        </div>
+        {/* Row 2: series filter chips */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setSeriesFilter(null)}
+            className={`chip-sort ${seriesFilter === null ? 'chip-active' : 'chip-inactive'}`}
+          >
+            {t('collections.allSeries')}
+          </button>
+          {seriesOptions.map(({ id: sid, name }) => (
+            <button
+              key={sid}
+              onClick={() => setSeriesFilter(sid === seriesFilter ? null : sid)}
+              className={`chip-sort ${seriesFilter === sid ? 'chip-active' : 'chip-inactive'}`}
+            >
+              {name}
+            </button>
+          ))}
+          <button
+            onClick={() => setSeriesFilter(seriesFilter === '__unsorted__' ? null : '__unsorted__')}
+            className={`chip-sort ${seriesFilter === '__unsorted__' ? 'chip-active' : 'chip-inactive'}`}
+          >
+            {t('collections.unsorted')}
+          </button>
+        </div>
+      </div>
+
+      {/* Comic groups */}
+      {loadingComics ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="aspect-[2/3] rounded-md" />)}
+        </div>
+      ) : grouped.length === 0 ? (
+        <EmptyState
+          icon={<Folders className="size-8 text-muted-foreground" />}
+          title={t('collections.emptyCollection')}
+          description={t('collections.emptyComicsHint')}
+          action={
+            <Button onClick={() => setAddOpen(true)} className="gap-2">
+              <Plus className="size-4" />
+              {t('collections.addComics')}
+            </Button>
+          }
+        />
+      ) : (
+        <div ref={containerRef}>
+          {grouped.map(({ key, series, items }) => {
+            const hasMore = items.length > cols
+            const visible = items.slice(0, hasMore ? cols - 1 : cols)
+            const extraCount = items.length - visible.length
+            const progress = series?.totalVolumes && series.totalVolumes > 0
+              ? Math.round((items.length / series.totalVolumes) * 100)
+              : null
+            const subtitleParts = [
+              `${items.length} ${t('library.issues').toLowerCase()}`,
+              series?.totalVolumes ? `${items.length}/${series.totalVolumes} vol.` : null,
+            ].filter(Boolean).join(' · ')
+
+            return (
+              <section key={key} className="mb-12">
+                <div className="flex justify-between items-end pb-3 border-b border-border/15 mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold">
+                      {key === '__unsorted__' ? t('collections.unsorted') : series?.name ?? t('collections.unsorted')}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">{subtitleParts}</p>
+                  </div>
+                  {key !== '__unsorted__' && (
+                    <button
+                      onClick={() => navigate(`/series/${key}`)}
+                      className="text-xs font-bold text-primary hover:text-primary/70 uppercase tracking-wider transition-colors shrink-0 ml-4"
+                    >
+                      {t('seriesDetail.viewAll')} →
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {visible.map((item) => (
+                    <CollectionComicCard
+                      key={item.comic.id}
+                      item={item}
+                      onRemove={(comicId) => removeMutation.mutate(comicId)}
+                    />
+                  ))}
+                  {extraCount > 0 && key !== '__unsorted__' && (
+                    <button
+                      onClick={() => navigate(`/series/${key}`)}
+                      className="h-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border/25 hover:border-primary/40 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <span className="text-xl font-bold">+{extraCount}</span>
+                      <span className="text-[0.6rem] font-bold uppercase tracking-wider">
+                        {t('seriesDetail.viewAll')}
+                      </span>
+                    </button>
+                  )}
+                </div>
+                {progress !== null && (
+                <>
+                  <div className="h-0.5 mt-5 bg-muted rounded-full overflow-hidden mb-5">
+                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
+                  </div>
+                    <p className="text-[0.65rem] text-muted-foreground uppercase font-bold tracking-wider">
+                      <span className='text-bg-foreground'> {progress}%</span> {t('collections.seriesProgressComplete')}
+                    </p>
+                </>
+                )}
+              </section>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Dialogs / Sheets */}
       <EditCollectionDialog open={editOpen} onClose={() => setEditOpen(false)} collection={collection} />
       <AddComicsSheet open={addOpen} onClose={() => setAddOpen(false)} collectionId={id!} existingIds={existingIds} />
       <SuggestionsSheet open={suggestOpen} onClose={() => setSuggestOpen(false)} collectionId={id!} existingIds={existingIds} />
+
+      {/* Delete confirm */}
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('collections.deleteTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t('collections.deleteConfirm')}</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>{t('common.cancel')}</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? t('common.deleting') : t('common.delete')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   )
 }

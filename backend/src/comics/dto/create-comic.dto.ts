@@ -34,9 +34,7 @@ export class CreateComicDto {
   @IsOptional()
   year?: number;
 
-  @ApiPropertyOptional({
-    example: 'Bruce Wayne descubre su camino hacia convertirse en Batman...',
-  })
+  @ApiPropertyOptional({ example: 'Bruce Wayne descubre su camino...' })
   @IsString()
   @IsOptional()
   synopsis?: string;
@@ -46,46 +44,34 @@ export class CreateComicDto {
   @IsOptional()
   coverUrl?: string;
 
-  @ApiPropertyOptional({ example: '12345' })
+  @ApiProperty({ example: '978-84-679-1234-5', description: 'ISBN obligatorio, no editable tras creación' })
   @IsString()
-  @IsOptional()
-  externalId?: string;
+  @IsNotEmpty()
+  isbn: string;
 
-  @ApiPropertyOptional({
-    example: 'comic_vine',
-    enum: ['comic_vine', 'marvel', 'gcd'],
-  })
-  @IsString()
-  @IsOptional()
-  externalApi?: string;
-
-  @ApiPropertyOptional({ example: '978-84-679-1234-5' })
-  @IsString()
-  @IsOptional()
-  isbn?: string;
-
-  @ApiPropertyOptional({ enum: BindingFormat })
+  @ApiPropertyOptional({ enum: BindingFormat, nullable: true })
   @IsEnum(BindingFormat)
   @IsOptional()
-  binding?: BindingFormat;
+  binding?: BindingFormat | null;
 
   @ApiPropertyOptional({ example: 'Ligne Claire' })
   @IsString()
   @IsOptional()
   drawingStyle?: string;
 
-  @ApiPropertyOptional({ example: 'Astérix' })
-  @IsString()
-  @IsOptional()
-  series?: string;
-
   @ApiPropertyOptional({ example: 'Frank Miller, David Mazzucchelli' })
   @IsString()
   @IsOptional()
   authors?: string;
 
-  @ApiPropertyOptional({ description: 'ID de la Serie a la que pertenece este cómic' })
+  @ApiPropertyOptional({ example: 'Frank Miller' })
   @IsString()
   @IsOptional()
-  seriesId?: string;
+  scriptwriter?: string;
+
+  @ApiPropertyOptional({ example: 'David Mazzucchelli' })
+  @IsString()
+  @IsOptional()
+  artist?: string;
+
 }

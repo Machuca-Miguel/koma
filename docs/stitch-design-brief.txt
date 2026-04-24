@@ -1,0 +1,371 @@
+KOMA — Design Brief for Stitch AI
+===================================
+App: Koma — Personal Comic Collection Manager
+Platform: Web-first, responsive (also mobile web)
+Navigation: Sidebar on desktop / Bottom navigation bar on mobile
+Style: Professional, clean, organized. No gradients, no heavy illustration.
+       Flat components, clear hierarchy, data-forward.
+Font: Geist (sans-serif), system fallback
+Radius: 10px base (cards, inputs, buttons share consistent border radius)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESIGN SYSTEM — COLOR TOKENS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Brand colors (identical in both modes):
+  Primary (teal/mint):   #00B8A7
+  Accent  (coral):       #FF8A65
+  Danger  (red-pink):    #F43F5E
+
+── LIGHT MODE ──────────────────────────────────────────────────────────────────
+  Background:            #F8FAFC   (page canvas)
+  Foreground (text):     #121212   (primary text)
+  Card surface:          #FFFFFF
+  Card text:             #121212
+  Muted background:      #F1F5F9   (inactive chips, tags)
+  Muted text:            #64748B   (secondary / helper text)
+  Secondary surface:     #E2E8F0   (chips, hover)
+  Border / Input:        #E2E8F0
+  Sidebar background:    #FFFFFF
+  Sidebar border:        #E2E8F0
+  Focus ring:            #00B8A7
+  Card shadow:           0 1px 3px rgba(0,0,0,0.06)
+
+── DARK MODE (default for the brief) ────────────────────────────────────────────
+  Background:            #121212   (near-black neutral)
+  Foreground (text):     #FAFAFA   (soft white)
+  Card surface:          #1C1C1C   (1 level above background)
+  Card text:             #FAFAFA
+  Popover / Sheet:       #1C1C1C
+  Muted background:      #27272A   (inactive, disabled states)
+  Muted text:            #A1A1AA   (secondary text)
+  Secondary surface:     #27272A
+  Border / Input:        #2E2E32   (subtle, does not compete with content)
+  Sidebar background:    #1C1C1C
+  Sidebar border:        #2E2E32
+  Focus ring:            #00B8A7
+  Card shadow:           none (borders used as elevation delimiters)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GLOBAL NAVIGATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Desktop (sidebar, left-fixed, ~240px wide):
+  - App logo + name "Koma" at top
+  - Navigation items (icon + label): Dashboard, Library, Discover, Collections, Search, Settings
+  - Active item: teal (#00B8A7) background pill, dark text
+  - Inactive item: muted text, hover shows muted background
+  - User avatar + name at the bottom
+
+Mobile (bottom navigation bar):
+  - 5 tabs with icon only (+ label on active): Library, Search, Discover, Collections, Settings
+  - Active tab: teal icon + teal label
+  - Background: card surface (#1C1C1C dark / #FFFFFF light)
+  - Top border separator
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 1 — LOGIN PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: Two-column on desktop (decorative panel left, form right). Single column on mobile (form only).
+
+Left panel (desktop only):
+  - Full-height solid teal (#00B8A7) background
+  - App logo/wordmark centered
+  - Tagline: "Your personal comic collection" in dark text on teal
+
+Right panel / mobile form:
+  - Centered card with generous padding
+  - Heading: "Welcome back" (bold, large)
+  - Subheading: "Sign in to your collection" (muted text)
+  - Input: Email (label above, border input)
+  - Input: Password (label above, border input, show/hide toggle icon)
+  - CTA button: "Sign in" — full width, teal background, dark text
+  - Divider: "or continue with" (horizontal line with text)
+  - Button: "Continue with Google" — outlined, full width, Google logo icon
+  - Footer link: "Don't have an account? Register"
+  - Theme toggle (top-right corner, sun/moon icon)
+
+States to show: default, loading (spinner on button), error (red border + message below input).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 2 — REGISTER PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: Mirror of Login — two-column desktop, single column mobile.
+
+Form fields (same card style as Login):
+  - Heading: "Create account"
+  - Subheading: "Start cataloguing your collection"
+  - Input: Name
+  - Input: Email
+  - Input: Password
+  - Input: Confirm password
+  - CTA: "Create account" (teal, full width)
+  - Divider + "Continue with Google" (same as login)
+  - Footer: "Already have an account? Sign in"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 3 — DASHBOARD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: Main content area with sidebar. Page title "Dashboard" top-left.
+
+Sections:
+
+  [Stats row — 4 cards horizontal]
+    Each card: icon (teal), large number, label below
+    Examples: "124 Comics", "18 Series", "42 Read", "8 Wishlist"
+    Card: #1C1C1C, border #2E2E32, border-radius 10px
+
+  [Recent activity — list card]
+    Title: "Recently added"
+    List of 5 comics: cover thumbnail (40×56px), title, series, date added
+    Each row: hoverable, subtle separator between rows
+
+  [Reading progress — card]
+    Title: "Reading progress"
+    Horizontal progress bar (teal fill on muted background)
+    Label: "42 of 124 comics read (34%)"
+
+  [Wishlist preview — horizontal scroll row on mobile, grid on desktop]
+    Title: "Wishlist" + "See all" link (teal text, right)
+    3–4 comic cover cards: image, title below, coral badge "Wishlist"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 4 — LIBRARY PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: Full-width content area. Default grouped by series.
+
+Header row:
+  - Page title "Library" (left)
+  - View toggle: "Series" | "Comics" (segmented control or pills, teal active)
+  - Sort dropdown: "Sort by Series / Title / Year / Date Added / Rating"
+  - Search bar (inline, short, magnifier icon)
+
+Series view (default):
+  Grid of series cards (3–4 cols desktop, 2 cols tablet, 1 col mobile)
+  Each series card:
+    - Cover image (top, aspect 2:3 approx.)
+    - Series title (bold, 1 line truncated)
+    - Publisher (muted text, small)
+    - Progress bar: "8 / 12 issues" — teal fill
+    - Completion badge: green "Complete" or coral "Ongoing"
+    - Clickable → expands to series issue list
+
+Comics view (flat list):
+  Same grid but each card shows individual comic:
+    - Cover image
+    - Title
+    - Issue number badge (top-right corner of cover, teal pill)
+    - Status badges row: small pills — "Owned" (teal), "Read" (muted), "Wishlist" (coral)
+    - Rating: small stars (1–5) below title
+
+Filter chips row (below header):
+  Horizontal scrollable chips: "All" | "Owned" | "Read" | "Wishlist" | "Favorites" | "Loaned"
+  Active chip: teal background, dark text
+  Inactive chip: muted background, secondary text
+
+Empty state:
+  Centered icon (open box), "Your library is empty", "Search for comics to add them" (muted text),
+  "Search comics" CTA button (teal).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 5 — SEARCH PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Purpose: Discover and search external databases (GCD, ISBNdb, OpenLibrary) to add comics.
+Default search mode: by Series.
+
+Header:
+  - Page title "Search"
+  - Large search bar centered: placeholder "Search series, titles, ISBN…"
+  - Search type toggle pills: "Series" | "Comics" | "ISBN"
+
+Results:
+  List layout (not grid) — each result row:
+    - Cover thumbnail (56×80px, border-radius 6px)
+    - Series/title (bold)
+    - Publisher + year range (muted)
+    - Issue count badge (small, muted pill)
+    - "View issues" button (outlined teal, right-aligned)
+
+On "View issues" click → expands an inline panel or opens a sheet:
+  List of issues: number, title, year, cover thumbnail
+  Each issue row has "+ Add to library" button (teal icon button)
+
+When an issue is already in the library:
+  Show "In library" badge (teal, check icon) instead of add button.
+
+Empty / initial state:
+  Centered icon, "Search for comics or series" prompt, muted text.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 6 — COMIC DETAIL PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: Hero + two-column detail on desktop. Single column stacked on mobile.
+
+Hero area:
+  - Large cover image (left, ~200px wide, rounded, subtle border)
+  - Right of cover:
+    - Title (h1, bold)
+    - Series name (teal link, below title)
+    - Issue number + Year (muted text)
+    - Publisher (muted text)
+    - Star rating (1–5 stars, interactive, teal filled)
+    - Status pills row: "Owned" | "Read" | "Wishlist" | "Favorite"
+      (toggleable chips — active = teal or coral, inactive = muted)
+    - "Edit" button (outlined) + "Remove from library" (destructive text button, red)
+
+Metadata section (below hero, card):
+  Two-column grid of label-value pairs:
+    Writer, Penciler, Inker, Colorist, Letterer
+    Publisher, Format (hardcover / softcover / single issue)
+    Pages, ISBN
+    Drawing style
+  Each pair: label in muted small caps, value in normal text
+
+Synopsis / Notes section (card):
+  - "Synopsis" tab | "My notes" tab
+  - Text area for personal notes (editable inline on click)
+
+Loan section (card, only shown if comic is loaned):
+  - Orange/coral banner: "Loaned to [Name]"
+  - Date loaned
+  - "Mark as returned" button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 7 — EXTERNAL COMIC DETAIL PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Context: Viewed from Search results before adding to library.
+Layout: Same structure as Comic Detail but read-only.
+
+Differences from Comic Detail:
+  - No status chips (not in library yet)
+  - No rating
+  - Top CTA bar (sticky on mobile): "Add to Library" (teal button, full width on mobile)
+  - "Add to Library" opens a side sheet with checkboxes:
+      [x] Owned  [ ] Read  [ ] Wishlist  [ ] Favorite
+      [Save] button (teal)
+  - Metadata sourced from GCD (no user-editable fields)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 8 — DISCOVER PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Purpose: AI-powered recommendations and reading insights based on the user's library.
+
+Layout: Single column, section-based.
+
+Section 1 — "AI Recommendations"
+  Card with teal top-border accent:
+    - Title: "Recommended for you" + sparkle/AI icon (teal)
+    - Description: "Based on your collection" (muted text)
+    - "Refresh" button (outlined teal, top-right of card)
+    - Loading state: 3 skeleton cards (animated shimmer, #27272A)
+    - Results: horizontal scroll row of recommendation cards
+      Each card: cover image, title, reason tag (e.g. "Similar to Saga", coral small badge)
+      Tap card → opens External Comic Detail
+
+Section 2 — "Your Series Summary"
+  Card:
+    - Title: "Series overview"
+    - List of series the user follows with completion progress
+    - Each row: series cover (small), name, "X / Y issues" progress bar (teal), "Ongoing" or "Complete" badge
+
+Section 3 — "Reading stats"
+  Row of 2–3 stat cards:
+    - "Most read genre" (with icon)
+    - "Longest series collected" (with icon)
+    - "Completion rate: X%" (circular progress, teal)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 9 — COLLECTIONS PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Purpose: User-defined groupings of comics (e.g. "Marvel 90s", "To read", "Favorites").
+
+Header:
+  - "Collections" title
+  - "+ New collection" button (teal, top-right)
+
+Collections grid (2–3 cols desktop, 2 cols tablet, 1 col mobile):
+  Each collection card:
+    - Mosaic of up to 4 comic covers (2×2 grid) as card header image
+    - Collection name (bold)
+    - Comic count (muted: "12 comics")
+    - Overflow menu (3-dot icon): Rename, Delete
+    - Clickable → Collection Detail
+
+Empty state:
+  Centered icon (folder), "No collections yet", "+ Create your first collection" (teal button).
+
+Collection Detail (sub-view, same URL pattern):
+  - Back link + collection name as title
+  - Same comics grid as Library comics view
+  - "+ Add comics" button (teal, top-right) → opens a search sheet to pick from library
+  - Each comic card has "Remove" option on long-press / hover (X icon, red)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW 10 — SETTINGS PAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: Single column, grouped sections with section labels.
+
+Section: Appearance
+  - Theme: toggle — "Light" | "Dark" | "System" (segmented control)
+  - Language: dropdown — English | Español
+
+Section: Account
+  - Display name (editable input + save icon)
+  - Email (read-only, with "Change email" link)
+  - "Change password" row (chevron right → inline form expands)
+    Fields: Current password, New password, Confirm — Save button (teal)
+
+Section: Data
+  - "Export library" row (icon + label + "CSV / JSON" secondary badge + chevron)
+  - "Import from CSV" row (icon + label + chevron)
+
+Section: Danger zone
+  - "Delete account" — red destructive button, opens confirmation dialog
+    Dialog: "Are you sure? This action cannot be undone." [Cancel] [Delete account]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SHARED UI PATTERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Toast notifications (top-right desktop / bottom center mobile):
+  - Success: green-tinted background, check icon, e.g. "Added to library"
+  - Error: red-tinted (#F43F5E), X icon
+  - Auto-dismiss after 3s, manual dismiss X button
+
+Side Sheet (right slide-in panel, ~400px desktop / full-width mobile):
+  Used for: "Add to library", "Edit comic", "Add to collection", "New collection"
+  Structure:
+    - Header (title + close X button, border-bottom)
+    - Scrollable body (form fields)
+    - Sticky footer (Cancel + Save/Confirm buttons)
+  Backdrop: semi-transparent overlay on desktop
+
+Confirmation dialog:
+  Centered modal, max-width 400px
+  - Title (bold), description (muted), [Cancel] outlined + [Confirm] teal or [Delete] red
+  - Backdrop overlay
+
+Status badges (reused across Library and Comic Detail):
+  - Owned:    teal (#00B8A7) small pill
+  - Read:     muted gray pill
+  - Wishlist: coral (#FF8A65) small pill
+  - Favorite: amber/yellow star icon
+  - Loaned:   coral pill with user icon
+
+Loading skeleton:
+  Animated shimmer blocks using #27272A (dark) / #E2E8F0 (light)
+  Matches the shape of the content being loaded (card skeleton, row skeleton, etc.)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF BRIEF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -12,7 +12,11 @@ import {
   Res,
   ParseIntPipe,
   DefaultValuePipe,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import {
   ApiTags,
@@ -20,23 +24,21 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
+import { CollectionStatus } from '@prisma/client';
 import { UserComicsService } from './user-comics.service';
 import type { SortBy, StatusFilter } from './user-comics.service';
 import { AddComicDto } from './dto/add-comic.dto';
 import { UpdateUserComicDto } from './dto/update-user-comic.dto';
+import { AddComicsToCollectionDto } from './dto/add-to-collection.dto';
 
 class AddByIsbnDto {
   @IsString()
   isbn!: string;
 
-  @IsBoolean()
+  @IsIn(Object.values(CollectionStatus))
   @IsOptional()
-  isOwned?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  isWishlist?: boolean;
+  collectionStatus?: CollectionStatus;
 }
 
 class BulkDeleteDto {
@@ -58,7 +60,18 @@ export class UserComicsController {
   @ApiOperation({ summary: 'Obtener mi biblioteca de cómics' })
   @ApiQuery({
     name: 'status',
-    enum: ['OWNED', 'READ', 'WISHLIST', 'FAVORITE', 'LOANED', 'ALL'],
+    enum: [
+      'IN_COLLECTION',
+      'WISHLIST',
+      'LOANED',
+      'READ',
+      'READING',
+      'TO_READ',
+      'FOR_SALE',
+      'TO_SELL',
+      'SOLD',
+      'ALL',
+    ],
     required: false,
   })
   @ApiQuery({
@@ -75,7 +88,7 @@ export class UserComicsController {
   @ApiQuery({
     name: 'searchBy',
     required: false,
-    enum: ['title', 'author', 'publisher'],
+    enum: ['title', 'authors', 'scriptwriter', 'artist', 'publisher'],
     description: 'Campo en el que buscar (por defecto busca en todos)',
   })
   @ApiQuery({
@@ -109,7 +122,8 @@ export class UserComicsController {
     @Query('status') status?: StatusFilter,
     @Query('sortBy') sortBy?: SortBy,
     @Query('q') q?: string,
-    @Query('searchBy') searchBy?: 'title' | 'author' | 'publisher',
+    @Query('searchBy')
+    searchBy?: 'title' | 'authors' | 'scriptwriter' | 'artist' | 'publisher',
     @Query('tag') tag?: string,
     @Query('publisher') publisher?: string,
     @Query('yearFrom') yearFrom?: string,
@@ -131,11 +145,47 @@ export class UserComicsController {
     });
   }
 
+  @Get('series/:id')
+  @ApiOperation({
+    summary: 'Detalle de una serie en la biblioteca del usuario',
+  })
+  getSeriesDetail(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    return this.userComicsService.getSeriesDetail(req.user.id, id);
+  }
+
+  @Patch('series/:id/reorder')
+  @ApiOperation({ summary: 'Reordenar cómics de una serie en la biblioteca' })
+  reorderSeries(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: { positions: { comicId: string; position: number }[] },
+  ) {
+    return this.userComicsService.reorderSeries(
+      req.user.id,
+      id,
+      body.positions,
+    );
+  }
+
   @Get('series-view')
   @ApiOperation({ summary: 'Vista de biblioteca agrupada por serie' })
   @ApiQuery({
     name: 'status',
-    enum: ['OWNED', 'READ', 'WISHLIST', 'FAVORITE', 'LOANED', 'ALL'],
+    enum: [
+      'IN_COLLECTION',
+      'WISHLIST',
+      'LOANED',
+      'READ',
+      'READING',
+      'TO_READ',
+      'FOR_SALE',
+      'TO_SELL',
+      'SOLD',
+      'ALL',
+    ],
     required: false,
   })
   @ApiQuery({ name: 'q', required: false, type: String })
@@ -198,6 +248,15 @@ export class UserComicsController {
     return this.userComicsService.add(req.user.id, dto);
   }
 
+  @Post('to-collection')
+  @ApiOperation({ summary: 'Asignar múltiples cómics de la biblioteca a una serie (atómico)' })
+  addMultipleToCollection(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: AddComicsToCollectionDto,
+  ) {
+    return this.userComicsService.addMultipleToCollection(req.user.id, dto);
+  }
+
   @Post('add-by-isbn')
   @ApiOperation({
     summary:
@@ -205,8 +264,7 @@ export class UserComicsController {
   })
   addByIsbn(@Request() req: AuthenticatedRequest, @Body() dto: AddByIsbnDto) {
     return this.userComicsService.addByIsbn(req.user.id, dto.isbn, {
-      isOwned: dto.isOwned,
-      isWishlist: dto.isWishlist,
+      collectionStatus: dto.collectionStatus,
     });
   }
 
@@ -222,10 +280,7 @@ export class UserComicsController {
 
   @Delete('bulk')
   @ApiOperation({ summary: 'Eliminar varios cómics de mi biblioteca de una vez (ej: colección completa)' })
-  removeBulk(
-    @Request() req: AuthenticatedRequest,
-    @Body() dto: BulkDeleteDto,
-  ) {
+  removeBulk(@Request() req: AuthenticatedRequest, @Body() dto: BulkDeleteDto) {
     return this.userComicsService.removeBulk(req.user.id, dto.comicIds);
   }
 
@@ -236,5 +291,17 @@ export class UserComicsController {
     @Param('comicId') comicId: string,
   ) {
     return this.userComicsService.remove(req.user.id, comicId);
+  }
+
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Importar biblioteca desde CSV' })
+  async importLibrary(
+    @Request() req: AuthenticatedRequest,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const csvString = file.buffer.toString('utf-8');
+    return this.userComicsService.importLibrary(req.user.id, csvString);
   }
 }

@@ -26,4 +26,9 @@ export class QueryComicDto {
   @Type(() => Number)
   @IsOptional()
   limit?: number = 20;
+
+  @ApiPropertyOptional({ description: 'Buscar por ISBN exacto' })
+  @IsString()
+  @IsOptional()
+  isbn?: string;
 }

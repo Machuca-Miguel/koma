@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 
-type PageSize = 'default' | 'narrow' | 'xs'
+type PageSize = 'default' | 'narrow' | 'xs' | 'wide'
 
 const SIZE_CLASS: Record<PageSize, string> = {
-  default: 'max-w-5xl',
+  wide:    'max-w-9xl',
+  default: 'max-w-7xl',
   narrow:  'max-w-4xl',
   xs:      'max-w-2xl',
 }
@@ -18,7 +19,7 @@ export function PageContainer({
   className?: string
 }) {
   return (
-    <div className={`p-8 ${SIZE_CLASS[size]} mx-auto ${className}`}>
+    <div className={`px-8 ${SIZE_CLASS[size]} mx-auto ${className}`}>
       {children}
     </div>
   )

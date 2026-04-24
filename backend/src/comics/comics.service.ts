@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateComicDto } from './dto/create-comic.dto';
 import { UpdateComicDto } from './dto/update-comic.dto';
@@ -9,10 +13,11 @@ export class ComicsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: QueryComicDto) {
-    const { search, publisher, page = 1, limit = 20 } = query;
+    const { search, publisher, isbn, page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
     const where = {
+      ...(isbn && { isbn }),
       ...(search && {
         OR: [
           { title: { contains: search, mode: 'insensitive' as const } },
@@ -46,12 +51,15 @@ export class ComicsService {
     return comic;
   }
 
-  async create(dto: CreateComicDto) {
-    return this.prisma.comic.create({ data: dto });
+  async create(dto: CreateComicDto, userId: string) {
+    return this.prisma.comic.create({ data: { ...dto, createdBy: userId } });
   }
 
-  async update(id: string, dto: UpdateComicDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateComicDto, userId: string) {
+    const comic = await this.findOne(id);
+    if (comic.createdBy !== userId) {
+      throw new ForbiddenException('Solo el creador del cómic puede editarlo');
+    }
     return this.prisma.comic.update({ where: { id }, data: dto });
   }
 
@@ -85,6 +93,19 @@ export class ComicsService {
   async removeTag(comicId: string, tagId: string) {
     await this.prisma.comicTag.deleteMany({ where: { comicId, tagId } });
     return this.findOne(comicId);
+  }
+
+  async getCollections(comicId: string, userId: string) {
+    const userComic = await this.prisma.userComic.findUnique({
+      where: { userId_comicId: { userId, comicId } },
+      include: {
+        collectionSeries: {
+          include: { collection: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    if (!userComic?.collectionSeries) return [];
+    return [userComic.collectionSeries.collection];
   }
 
   async getTagsByUser(userId: string) {

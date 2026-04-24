@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Delete,
   Body,
   UseGuards,
   Request,
@@ -35,6 +36,13 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(req.user.id, dto);
+  }
+
+  @Delete('me')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete own account permanently' })
+  deleteAccount(@Request() req: AuthenticatedRequest) {
+    return this.usersService.deleteAccount(req.user.id);
   }
 
   @Patch('me/password')

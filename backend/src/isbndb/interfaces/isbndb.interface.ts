@@ -12,6 +12,7 @@ export interface IsbndbBook {
   synopsis?: string;
   overview?: string;
   image?: string;
+  image_original?: string;
   pages?: number;
   subjects?: string[];
   binding?: string;

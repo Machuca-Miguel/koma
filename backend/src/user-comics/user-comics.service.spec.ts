@@ -12,8 +12,8 @@ const mockPrisma = {
     findUnique: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     delete: jest.fn(),
-    groupBy: jest.fn(),
     aggregate: jest.fn(),
   },
   comic: {
@@ -21,28 +21,30 @@ const mockPrisma = {
     findFirst: jest.fn(),
     create: jest.fn(),
   },
+  collectionSeries: {
+    findUnique: jest.fn(),
+  },
 };
 
 const mockIsbndb = {
   getBook: jest.fn(),
 };
 
-
 const MOCK_COMIC = { id: 'comic-1', title: 'Batman #1' };
 const MOCK_USER_COMIC = {
   id: 'uc-1',
   userId: 'user-1',
   comicId: 'comic-1',
-  isOwned: true,
-  isRead: false,
-  isWishlist: false,
-  isFavorite: false,
-  isLoaned: false,
+  collectionStatus: 'IN_COLLECTION',
+  readStatus: null,
+  saleStatus: null,
+  collectionSeriesId: null,
   loanedTo: null,
   rating: 8,
   notes: 'Great issue',
   addedAt: new Date(),
   comic: MOCK_COMIC,
+  override: null,
 };
 
 describe('UserComicsService', () => {
@@ -73,14 +75,14 @@ describe('UserComicsService', () => {
       expect(result.totalPages).toBe(1);
     });
 
-    it('filters by OWNED status flag', async () => {
+    it('filters by IN_COLLECTION status', async () => {
       mockPrisma.userComic.findMany.mockResolvedValue([]);
       mockPrisma.userComic.count.mockResolvedValue(0);
 
-      await service.findAll('user-1', { status: 'OWNED' });
+      await service.findAll('user-1', { status: 'IN_COLLECTION' });
 
       const whereArg = mockPrisma.userComic.findMany.mock.calls[0][0].where;
-      expect(whereArg.isOwned).toBe(true);
+      expect(whereArg.collectionStatus).toBe('IN_COLLECTION');
     });
 
     it('applies correct skip for page 3', async () => {
@@ -92,16 +94,18 @@ describe('UserComicsService', () => {
       expect(mockPrisma.userComic.findMany.mock.calls[0][0].skip).toBe(20);
     });
 
-    it('applies search filter on title, series and publisher', async () => {
+    it('applies search filter including series name at UserComic level', async () => {
       mockPrisma.userComic.findMany.mockResolvedValue([]);
       mockPrisma.userComic.count.mockResolvedValue(0);
 
       await service.findAll('user-1', { q: 'asterix' });
 
       const whereArg = mockPrisma.userComic.findMany.mock.calls[0][0].where;
-      expect(whereArg.comic).toBeDefined();
-      expect(whereArg.comic.OR).toBeDefined();
-      expect(whereArg.comic.OR[0].title.contains).toBe('asterix');
+      // Search uses OR at UserComic level (comic fields + collectionSeries name)
+      expect(whereArg.OR).toBeDefined();
+      const comicOrClause = whereArg.OR.find((c: any) => c.comic);
+      expect(comicOrClause).toBeDefined();
+      expect(comicOrClause.comic.OR[0].title.contains).toBe('asterix');
     });
   });
 
@@ -111,10 +115,7 @@ describe('UserComicsService', () => {
       mockPrisma.userComic.findUnique.mockResolvedValue(null);
       mockPrisma.userComic.create.mockResolvedValue(MOCK_USER_COMIC);
 
-      const result = await service.add('user-1', {
-        comicId: 'comic-1',
-        isOwned: true,
-      });
+      const result = await service.add('user-1', { comicId: 'comic-1' });
       expect(result).toEqual(MOCK_USER_COMIC);
     });
 
@@ -122,7 +123,7 @@ describe('UserComicsService', () => {
       mockPrisma.comic.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.add('user-1', { comicId: 'bad-id', isOwned: true }),
+        service.add('user-1', { comicId: 'bad-id' }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -131,7 +132,7 @@ describe('UserComicsService', () => {
       mockPrisma.userComic.findUnique.mockResolvedValue(MOCK_USER_COMIC);
 
       await expect(
-        service.add('user-1', { comicId: 'comic-1', isOwned: true }),
+        service.add('user-1', { comicId: 'comic-1' }),
       ).rejects.toThrow(ConflictException);
     });
   });
@@ -225,25 +226,28 @@ describe('UserComicsService', () => {
   });
 
   describe('getStats', () => {
-    it('returns stats with individual flag counts and average rating', async () => {
+    it('returns stats with status counts and average rating', async () => {
       mockPrisma.userComic.count
         .mockResolvedValueOnce(15) // total
-        .mockResolvedValueOnce(10) // owned
-        .mockResolvedValueOnce(5) // read
-        .mockResolvedValueOnce(3) // wishlist
-        .mockResolvedValueOnce(2) // favorite
-        .mockResolvedValueOnce(1); // loaned
+        .mockResolvedValueOnce(10) // IN_COLLECTION
+        .mockResolvedValueOnce(3)  // WISHLIST
+        .mockResolvedValueOnce(1)  // LOANED
+        .mockResolvedValueOnce(5)  // READ
+        .mockResolvedValueOnce(2)  // READING
+        .mockResolvedValueOnce(4); // TO_READ
       mockPrisma.userComic.aggregate.mockResolvedValue({
         _avg: { rating: 8.4 },
         _count: { rating: 7 },
       });
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
 
       const result = await service.getStats('user-1');
 
       expect(result.total).toBe(15);
-      expect(result.byStatus['OWNED']).toBe(10);
+      expect(result.byStatus['IN_COLLECTION']).toBe(10);
+      expect(result.byStatus['WISHLIST']).toBe(3);
+      expect(result.byStatus['LOANED']).toBe(1);
       expect(result.byStatus['READ']).toBe(5);
-      expect(result.loaned).toBe(1);
       expect(result.totalRated).toBe(7);
       expect(result.averageRating).toBe(8.4);
     });
@@ -254,6 +258,7 @@ describe('UserComicsService', () => {
         _avg: { rating: null },
         _count: { rating: 0 },
       });
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
 
       const result = await service.getStats('user-1');
       expect(result.averageRating).toBeNull();

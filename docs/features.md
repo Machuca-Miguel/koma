@@ -1,6 +1,6 @@
 # Features — Koma
 
-> Actualizado: 2026-04-01 · Stack: NestJS 11 + Prisma 7 + PostgreSQL (Neon) + React 19 + Vite + TanStack Query + shadcn/ui + Tailwind v4
+> Actualizado: 2026-04-20 · Stack: NestJS 11 + Prisma 7 + PostgreSQL (Neon) + React 19 + Vite + TanStack Query + shadcn/ui + Tailwind v4
 
 ---
 
@@ -13,7 +13,7 @@
   /dashboard  ←──── acceso rápido a biblioteca y búsqueda
        │
        ├── /library        → gestión y consulta de la colección personal
-       ├── /search         → búsqueda en GCD e importación
+       ├── /search         → búsqueda en ISBNdb e importación
        ├── /comics/:id     → ficha completa de un cómic
        ├── /collections    → colecciones temáticas
        ├── /discover       → recomendaciones IA + resumen de series
@@ -40,7 +40,7 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 
 - Saludo personalizado según hora del día (mañana / tarde / noche)
 - Contador de cómics totales con enlace directo a la biblioteca
-- Tarjetas de estadísticas: `Tengo`, `Leído`, `Wishlist`, `Favorito`
+- Tarjetas de estadísticas: `IN_COLLECTION`, `WISHLIST`, `READ`, `LOANED`
 - Valoración media de los cómics puntuados (con contador de valorados)
 - Accesos rápidos: "Mi Biblioteca" y "Buscar cómics"
 
@@ -48,9 +48,9 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 
 **Vista de series (por defecto cuando `sortBy=series_asc`):**
 - Una tarjeta por serie con: portada (la del primer issue importado), nombre, editorial
-- Barra de progreso `X/Y números` cuando la serie está enlazada a GCD con `totalIssues`
+- Barra de progreso `X/Y números` cuando la serie tiene `totalVolumes` configurado
 - Indicador verde "¡Serie completa!" cuando todos los números están en la colección
-- Click en tarjeta → abre sheet lateral de completitud
+- Click en tarjeta → navega a `/library/series/:id`
 
 **Vista plana (otros modos de ordenación):**
 - Grid de tarjetas con portada, título, número de issue, editorial
@@ -61,7 +61,7 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 **Búsqueda y filtrado:**
 - Barra de búsqueda con debounce 300ms — busca en título, serie y editorial
 - Chips de filtro por etiqueta (tags del usuario)
-- Filtros de estado: Todos / Tengo / Leído / Wishlist / Favoritos
+- Filtros de estado: Todos / IN_COLLECTION / WISHLIST / READ / LOANED / y resto de valores de los tres grupos
 - Panel de filtros avanzados (desplegable):
   - Editorial (texto, debounce 300ms)
   - Año desde / Año hasta (número, min 1900, max 2099)
@@ -72,12 +72,10 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 - Serie (por defecto) — activa la vista de series con tarjeta por serie
 - Título / Año / Añadido / Puntuación — activan la vista plana
 
-**Completitud de series (sheet lateral):**
-- Se abre al hacer click en "Ver completitud" en la tarjeta de serie
-- Barra de progreso (X de Y números, % completitud)
-- Lista completa de issues: los que tienes (verde "En colección") + los que faltan (botón "Añadir a wishlist")
-- Usa `GET /gcd/series/:gcdSeriesId/completion` si la serie está enlazada; si no, `GET /gcd/series-completion?issueId=...`
-- Cuando se añade a wishlist se actualiza sin recargar (estado local `addedIds`)
+**Detalle de serie (`/library/series/:id`):**
+- Barra de progreso (X de Y números, % completitud) cuando `totalVolumes` está configurado
+- Lista de cómics de la serie con su estado en la biblioteca
+- Reordenación manual de posición dentro de la serie
 
 **Gestión:**
 - Eliminar cómic de la biblioteca (doble clic: papelera → confirmar)
@@ -85,35 +83,27 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 
 ### 4. Búsqueda (`/search`)
 
-**Fuentes disponibles:**
-- **GCD** (por defecto) — Grand Comics Database local, modo serie
-- **Google Books** — búsqueda en Google Books API
-- **Open Library** — búsqueda en Open Library API
-- **Tebeosfera** (beta) — scraper de la base de datos española
-- **Whakoom** (beta) — scraper de la red social de cómics
+**Fuente principal:** ISBNdb — base de datos global de libros y cómics con ISBN.
 
-**GCD — modo serie (por defecto para fuente GCD):**
-- Resultados: una card por serie (no por issue) con nombre, editorial, años y número de issues
-- Click en una card de serie → sheet lateral `GcdSeriesIssuesSheet`
-- Sheet lateral de serie: lista todos los issues con progreso de colección, botón "Añadir" por issue
-- Filtros aplicables para GCD: editorial, año (el filtro de creador está oculto en modo serie)
-- Al añadir un issue desde la sheet: se importa el comic y se añade como "Tengo" automáticamente
-
-**Fuentes externas (Google Books, Open Library, Tebeosfera, Whakoom):**
-- Resultados: grid de tarjetas con portada, título, autor, editorial, año y valoración (si disponible)
-- Botón "Añadir" por tarjeta — importa el cómic y lo añade como "Tengo"
+**Búsqueda por texto:**
+- Resultados: grid de tarjetas con portada, título, autor, editorial, año e ISBN
+- Botón "Añadir" por tarjeta — importa el cómic via `POST /isbndb/import` y lo añade como `IN_COLLECTION`
 - Paginación de 20 en 20
 
-**Añadir manualmente (fuentes externas sin resultados):**
-- Aparece cuando la búsqueda en fuente no-GCD no da resultados
-- Campos: Título (obligatorio), Issue, Año, Editorial, URL de portada
-- Solo disponible en fuentes externas (no en GCD, ya que GCD tiene su propia sheet)
+**Búsqueda por ISBN:**
+- Campo dedicado para búsqueda exacta por ISBN-10 o ISBN-13
+- `POST /my-library/add-by-isbn` — busca en ISBNdb, crea el cómic si no existe, y lo añade a la biblioteca en un solo paso
+
+**Añadir manualmente (sin resultados):**
+- Disponible cuando la búsqueda no da resultados
+- Campos: Título (obligatorio), Issue, Año, Editorial, URL de portada, ISBN
+- Crea el cómic directamente en la BD local sin pasar por ISBNdb
 
 ### 5. Ficha de cómic (`/comics/:id`)
 
 **Sección Hero:**
 - Portada (o placeholder si no hay)
-- Título, número de issue, editorial, año, precio y páginas (desde GCD cuando disponible)
+- Título, número de issue, editorial, año, ISBN, encuadernación, estilo de dibujo
 - Banner de aviso (ámbar) cuando falta portada o sinopsis
 - Botón de edición (lápiz) → abre EditSheet
 
@@ -126,9 +116,11 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 - Añadir etiqueta escribiendo + Enter; autocompletado desde etiquetas existentes del usuario
 - Eliminar etiqueta con × en cada badge
 
-**Estado personal (checkboxes/toggles):**
-- `Tengo` / `Leído` / `Wishlist` / `Favorito` — independientes y combinables
-- Toggle de préstamo con campo "Prestado a" (texto libre)
+**Estado personal (tripartito, independiente):**
+- Grupo 1 — Posesión: `IN_COLLECTION` / `WISHLIST` / `LOANED`
+- Grupo 2 — Lectura: `READ` / `READING` / `TO_READ`
+- Grupo 3 — Venta: `FOR_SALE` / `TO_SELL` / `SOLD`
+- Campo `loanedTo` activo cuando `collectionStatus = LOANED`
 
 **Puntuación:**
 - 1–5 estrellas, clic para puntuar; segundo clic en la misma estrella la deselecciona
@@ -136,13 +128,10 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 **Notas:**
 - Textarea con autoguardado por debounce (500ms)
 
-**Secciones de información (desde GCD cuando disponible):**
+**Secciones de información:**
 - Sinopsis
-- Creadores agrupados por rol (Guion, Dibujo, Tintas, Color, Rótulos, Edición)
-- Historias: tipo, páginas, género, personajes, sinopsis, primera línea
-- Serie: formato, años, total de números, fechas de publicación, color, dimensiones, papel, encuadernación, formato editorial
-- Editorial: nombre, años activa, web oficial
-- Publicación: precio, fecha de venta, código de barras, ISBN
+- Autores: guionista, artista, autores generales
+- Publicación: año, editorial, ISBN, encuadernación, estilo de dibujo
 
 **Dónde comprar (visible cuando `isWishlist === true` e `isbn` disponible):**
 - Botón copiar ISBN al portapapeles
@@ -222,7 +211,7 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 | EditSheet | Año | Número, min 1900, max 2099 |
 | Añadir manual | Título | Requerido (botón deshabilitado si vacío) |
 | Añadir manual | Año | Número, min 1900, max 2099 |
-| Búsqueda GCD | Año | Número, min 1900, max año actual |
+| Búsqueda ISBNdb | — | Sin validación extra (filtros de texto libre) |
 | Biblioteca — filtro avanzado | Año desde/hasta | Número, min 1900, max 2099 |
 
 ### Backend (NestJS class-validator)
@@ -248,33 +237,43 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 | POST | `/auth/register` | Registro de usuario |
 | POST | `/auth/login` | Login, devuelve JWT |
 | GET | `/auth/me` | Perfil del usuario autenticado |
+| GET | `/auth/google` | Inicia flujo Google OAuth |
 | GET | `/my-library` | Biblioteca con filtros y paginación |
-| POST | `/my-library` | Añadir cómic a la biblioteca |
-| PATCH | `/my-library/:comicId` | Actualizar estado/puntuación/notas |
-| DELETE | `/my-library/:comicId` | Eliminar de la biblioteca |
+| GET | `/my-library/series-view` | Biblioteca agrupada por serie |
+| GET | `/my-library/series/:id` | Detalle de una serie en la biblioteca |
+| PATCH | `/my-library/series/:id/reorder` | Reordenar cómics de una serie |
+| GET | `/my-library/comic/:comicId` | Estado de un cómic concreto |
 | GET | `/my-library/stats` | Estadísticas de la colección |
 | GET | `/my-library/export` | Exportar en CSV o JSON |
-| GET | `/my-library/comic/:comicId` | Estado de un cómic concreto |
+| POST | `/my-library` | Añadir cómic a la biblioteca |
+| POST | `/my-library/add-by-isbn` | Buscar por ISBN en ISBNdb y añadir a biblioteca |
+| POST | `/my-library/import` | Importar biblioteca desde CSV |
+| PATCH | `/my-library/:comicId` | Actualizar estado/puntuación/notas/overrides |
+| DELETE | `/my-library/:comicId` | Eliminar de la biblioteca |
+| DELETE | `/my-library/bulk` | Eliminar varios cómics a la vez |
+| GET | `/comics` | Listar/buscar cómics en la BD local |
+| GET | `/comics/tags/user` | Etiquetas del usuario |
 | GET | `/comics/:id` | Ficha completa de un cómic |
+| GET | `/comics/:id/collections` | Colecciones donde el usuario tiene este cómic |
 | POST | `/comics` | Crear cómic manualmente |
 | PATCH | `/comics/:id` | Editar metadatos de un cómic |
-| GET | `/comics/tags/user` | Etiquetas del usuario |
 | POST | `/comics/:id/tags` | Añadir etiqueta |
 | DELETE | `/comics/:id/tags/:tagId` | Eliminar etiqueta |
-| GET | `/gcd/search` | Búsqueda de issues en GCD |
-| GET | `/gcd/series-search` | Búsqueda de series en GCD (1 resultado por serie) |
-| GET | `/gcd/detail/:id` | Detalle de un issue GCD |
-| POST | `/gcd/import` | Importar issue GCD a la BD local (crea/enlaza Series automáticamente) |
-| GET | `/gcd/series-completion` | Completitud de una serie por issueId |
-| GET | `/gcd/series/:seriesId/completion` | Completitud de una serie por GCD series ID |
-| GET | `/my-library/series-view` | Biblioteca agrupada por serie (Series cards) |
+| GET | `/isbndb/books/search` | Buscar libros en ISBNdb |
+| GET | `/isbndb/book/:isbn` | Obtener libro por ISBN |
+| POST | `/isbndb/import` | Importar libro ISBNdb como cómic en BD local |
 | POST | `/ai/recommend` | Recomendaciones IA personalizadas |
 | GET | `/collections` | Listar colecciones del usuario |
 | POST | `/collections` | Crear colección |
 | PATCH | `/collections/:id` | Editar colección |
 | DELETE | `/collections/:id` | Eliminar colección |
+| GET | `/collections/:id/comics` | Listar cómics de una colección |
 | POST | `/collections/:id/comics` | Añadir cómic a colección |
 | DELETE | `/collections/:id/comics/:comicId` | Quitar cómic de colección |
+| GET | `/collections/:id/series` | Listar series de una colección |
+| POST | `/collections/:id/series` | Crear serie en una colección |
+| PATCH | `/collections/:id/series/:seriesId` | Editar serie |
+| DELETE | `/collections/:id/series/:seriesId` | Eliminar serie |
 | PATCH | `/users/me` | Actualizar perfil (username, language) |
 | PATCH | `/users/me/password` | Cambiar contraseña |
 
@@ -286,6 +285,5 @@ Todas las rutas bajo `/` requieren autenticación. Las rutas `/login` y `/regist
 - Lector de código de barras (cámara del móvil para buscar por ISBN)
 - Importación desde CSV / exportación compatible con Whakoom
 - Notificaciones de nuevas publicaciones en series seguidas
-- Alertas de precio en wishlist
 - App móvil nativa (PWA o Capacitor)
 - Compartir colección con enlace privado para familia/amigos

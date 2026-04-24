@@ -37,6 +37,12 @@ export class ComicsController {
     return this.comicsService.getTagsByUser(req.user.id);
   }
 
+  @Get(':id/collections')
+  @ApiOperation({ summary: 'Obtener colecciones donde el usuario tiene asignado este cómic' })
+  getCollections(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.comicsService.getCollections(id, req.user.id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un cómic por ID' })
   findOne(@Param('id') id: string) {
@@ -57,14 +63,14 @@ export class ComicsController {
 
   @Post()
   @ApiOperation({ summary: 'Crear un cómic' })
-  create(@Body() dto: CreateComicDto) {
-    return this.comicsService.create(dto);
+  create(@Body() dto: CreateComicDto, @Request() req: AuthenticatedRequest) {
+    return this.comicsService.create(dto, req.user.id);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Actualizar un cómic' })
-  update(@Param('id') id: string, @Body() dto: UpdateComicDto) {
-    return this.comicsService.update(id, dto);
+  @ApiOperation({ summary: 'Actualizar un cómic (solo el creador)' })
+  update(@Param('id') id: string, @Body() dto: UpdateComicDto, @Request() req: AuthenticatedRequest) {
+    return this.comicsService.update(id, dto, req.user.id);
   }
 
   @Delete(':id')

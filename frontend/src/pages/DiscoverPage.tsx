@@ -11,11 +11,12 @@ import { discoverApi } from '@/api/discover'
 import type { Recommendation } from '@/api/discover'
 import type { UserComic } from '@/types'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { PageHeader } from '@/components/layout/PageHeader'
 
 function groupBySeries(comics: UserComic[]): [string, UserComic[]][] {
   const map = new Map<string, UserComic[]>()
   for (const uc of comics) {
-    const key = uc.comic.series ?? ''
+    const key = uc.collectionSeries?.name ?? ''
     if (!key) continue
     const arr = map.get(key) ?? []
     arr.push(uc)
@@ -41,11 +42,8 @@ export function DiscoverPage() {
   })
 
   return (
-    <PageContainer size="narrow" className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('discover.title')}</h1>
-        <p className="text-muted-foreground mt-1">{t('discover.subtitle')}</p>
-      </div>
+    <PageContainer  className="space-y-10">
+      <PageHeader title={t('discover.title')} description={t('discover.subtitle')} className="mb-0" />
 
       {/* AI Recommendations */}
       <section className="space-y-4">

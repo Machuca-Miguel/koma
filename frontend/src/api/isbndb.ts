@@ -39,6 +39,7 @@ export interface IsbndbAuthorsResponse {
 export interface IsbndbAuthorBooksResponse {
   author: string
   books: IsbndbBook[]
+  total?: number
 }
 
 export interface IsbndbPublishersResponse {
@@ -50,6 +51,7 @@ export interface IsbndbPublishersResponse {
 export interface IsbndbPublisherBooksResponse {
   publisher: string
   books: IsbndbBook[]
+  total?: number
 }
 
 export interface IsbndbSubjectsResponse {
@@ -61,6 +63,7 @@ export interface IsbndbSubjectsResponse {
 export interface IsbndbSubjectBooksResponse {
   subject: string
   books: IsbndbBook[]
+  total?: number
 }
 
 export interface IsbndbStatsResponse {
