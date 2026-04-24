@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, Fragment, useMemo, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -15,14 +15,17 @@ import { comicsApi } from '@/api/comics'
 import { collectionsApi } from '@/api/collections'
 import { collectionSeriesApi } from '@/api/collection-series'
 import { libraryApi } from '@/api/library'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { BindingFormat, Collection, CollectionSeries, CollectionStatusValue, ReadStatusValue, SaleStatusValue } from '@/types'
+import type { BindingFormat, CollectionSeries, CollectionStatusValue, ReadStatusValue, SaleStatusValue } from '@/types'
+import { AutocompleteInput } from '@/components/ui/autocomplete-input'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { AddToCollectionSheet } from '@/components/features/AddToCollectionSheet'
 
 // ─── Tag Input ────────────────────────────────────────────────────────────────
 
@@ -102,12 +105,13 @@ function TagInput({ comicId, tags }: {
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 
-const BINDING_OPTIONS: BindingFormat[] = ['CARTONE', 'TAPA_BLANDA', 'BOLSILLO', 'OMNIBUS', 'HARDCOVER', 'DIGITAL' ]
+const BINDING_OPTIONS: BindingFormat[] = ['CARTONE', 'TAPA_BLANDA', 'BOLSILLO', 'OMNIBUS', 'HARDCOVER', 'SOFTCOVER', 'DIGITAL', 'OTHER']
 
-function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
+function EditSheet({ comicId, isCreator, initial, open, onClose, focusOnCover }: {
   comicId: string
+  isCreator: boolean
   initial: {
-    title: string; publisher?: string; year?: number; synopsis?: string
+    title: string; issueNumber?: string; publisher?: string; year?: number; synopsis?: string
     coverUrl?: string; isbn?: string; binding?: BindingFormat; drawingStyle?: string
     authors?: string; scriptwriter?: string; artist?: string
     collectionSeriesId?: string
@@ -150,6 +154,7 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
     colSearch ? c.name.toLowerCase().includes(colSearch.toLowerCase()) : true
   )
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (open) {
       setSelectedColId(initial.collectionSeries?.collectionId ?? '')
@@ -158,7 +163,8 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
       setCreatingNewSeries(false); setNewSeriesName('')
       setColSearch(''); setShowColDropdown(false)
     }
-  }, [open])
+  }, [open, initial])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (open && focusOnCover) {
@@ -188,24 +194,41 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
         qc.invalidateQueries({ queryKey: ['collection-series', resolvedColId] })
       }
 
-      // 3. Update comic metadata + series assignment in one call
-      await comicsApi.update(comicId, {
-        title: form.title || undefined,
-        publisher: form.publisher || undefined,
-        year: form.year || undefined,
-        synopsis: form.synopsis || undefined,
-        coverUrl: form.coverUrl || undefined,
-        isbn: form.isbn || undefined,
-        binding: form.binding || null,
-        drawingStyle: form.drawingStyle || undefined,
-        authors: form.authors || undefined,
-        scriptwriter: form.scriptwriter || undefined,
-        artist: form.artist || undefined,
-        collectionSeriesId: resolvedSeriesId ?? undefined,
-      })
+      // 3. Update comic metadata — creator edits canonical, non-creator writes overrides
+      if (isCreator) {
+        await comicsApi.update(comicId, {
+          title: form.title || undefined,
+          issueNumber: form.issueNumber || undefined,
+          publisher: form.publisher || undefined,
+          year: form.year || undefined,
+          synopsis: form.synopsis || undefined,
+          coverUrl: form.coverUrl || undefined,
+          binding: form.binding || null,
+          drawingStyle: form.drawingStyle || undefined,
+          authors: form.authors || undefined,
+          scriptwriter: form.scriptwriter || undefined,
+          artist: form.artist || undefined,
+        })
+      } else {
+        await libraryApi.update(comicId, {
+          titleOverride: form.title || null,
+          issueNumberOverride: form.issueNumber || null,
+          publisherOverride: form.publisher || null,
+          yearOverride: form.year || null,
+          synopsisOverride: form.synopsis || null,
+          coverUrlOverride: form.coverUrl || null,
+          bindingOverride: form.binding || null,
+          drawingStyleOverride: form.drawingStyle || null,
+          authorsOverride: form.authors || null,
+          scriptwriterOverride: form.scriptwriter || null,
+          artistOverride: form.artist || null,
+        })
+      }
 
-      // 4. If collection selected but no specific series → assign to Principal
-      if (resolvedColId && !resolvedSeriesId) {
+      // 4. Series assignment is always per-user (UserComic)
+      if (resolvedSeriesId) {
+        await libraryApi.update(comicId, { collectionSeriesId: resolvedSeriesId })
+      } else if (resolvedColId) {
         await collectionsApi.addComic(resolvedColId, comicId).catch(() => {})
       }
     },
@@ -222,6 +245,19 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
+
+  const { data: libraryData } = useQuery({
+    queryKey: ['library'],
+    queryFn: () => libraryApi.getAll({ limit: 200 }),
+    enabled: open,
+    staleTime: 60_000,
+  })
+  const libraryComics = libraryData?.data ?? []
+  const publisherSugg = useMemo(() => [...new Set(libraryComics.map((uc) => uc.comic.publisher).filter(Boolean) as string[])], [libraryComics])
+  const scriptwriterSugg = useMemo(() => [...new Set(libraryComics.map((uc) => uc.comic.scriptwriter).filter(Boolean) as string[])], [libraryComics])
+  const artistSugg = useMemo(() => [...new Set(libraryComics.map((uc) => uc.comic.artist).filter(Boolean) as string[])], [libraryComics])
+  const authorsSugg = useMemo(() => [...new Set(libraryComics.map((uc) => uc.comic.authors).filter(Boolean) as string[])], [libraryComics])
+  const drawingStyleSugg = useMemo(() => [...new Set(libraryComics.map((uc) => uc.comic.drawingStyle).filter(Boolean) as string[])], [libraryComics])
 
   return (
     <ModalPrimitive.Root open={open} onOpenChange={(o) => !o && onClose()}>
@@ -302,10 +338,13 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
 
               {/* Publisher + Year */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">{t('comicDetail.publisher')}</label>
-                  <Input value={form.publisher ?? ''} onChange={set('publisher')} className="h-10" />
-                </div>
+                <AutocompleteInput
+                  label={t('comicDetail.publisher')}
+                  value={form.publisher ?? ''}
+                  onChange={(v) => setForm((p) => ({ ...p, publisher: v }))}
+                  suggestions={publisherSugg}
+                  className="[&_input]:h-10"
+                />
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">{t('comicDetail.years')}</label>
                   <Input type="number" value={form.year ?? ''} min={1900} max={2099} className="h-10"
@@ -314,13 +353,11 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
               </div>
 
 
-              {/* ISBN + Binding */}
+              {/* Issue Number + Binding */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-sm font-medium">{t('comicDetail.isbn')}</label>
-                    </div>
-                  <Input value={form.isbn ?? ''} onChange={set('isbn')} className="h-10" />
+                  <label className="text-sm font-medium">{t('comicDetail.issueNumber') || 'Nº de Volumen'}</label>
+                  <Input value={form.issueNumber ?? ''} onChange={set('issueNumber')} className="h-10" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">{t('comicDetail.binding')}</label>
@@ -342,28 +379,44 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
               </div>
 
               {/* Authors */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">{t('comicDetail.authors')}</label>
-                <Input value={form.authors ?? ''} onChange={set('authors')} placeholder="Frank Miller, Alan Moore..." className="h-10" />
-              </div>
+              <AutocompleteInput
+                label={t('comicDetail.authors')}
+                value={form.authors ?? ''}
+                onChange={(v) => setForm((p) => ({ ...p, authors: v }))}
+                suggestions={authorsSugg}
+                placeholder="Frank Miller, Alan Moore..."
+                className="[&_input]:h-10"
+              />
 
               {/* Scriptwriter + Artist */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">{t('comicDetail.scriptwriter')}</label>
-                  <Input value={form.scriptwriter ?? ''} onChange={set('scriptwriter')} placeholder="Alan Moore..." className="h-10" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">{t('comicDetail.artist')}</label>
-                  <Input value={form.artist ?? ''} onChange={set('artist')} placeholder="Dave Gibbons..." className="h-10" />
-                </div>
+                <AutocompleteInput
+                  label={t('comicDetail.scriptwriter')}
+                  value={form.scriptwriter ?? ''}
+                  onChange={(v) => setForm((p) => ({ ...p, scriptwriter: v }))}
+                  suggestions={scriptwriterSugg}
+                  placeholder="Alan Moore..."
+                  className="[&_input]:h-10"
+                />
+                <AutocompleteInput
+                  label={t('comicDetail.artist')}
+                  value={form.artist ?? ''}
+                  onChange={(v) => setForm((p) => ({ ...p, artist: v }))}
+                  suggestions={artistSugg}
+                  placeholder="Dave Gibbons..."
+                  className="[&_input]:h-10"
+                />
               </div>
 
               {/* Drawing Style */}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">{t('comicDetail.drawingStyle')}</label>
-                <Input value={form.drawingStyle ?? ''} onChange={set('drawingStyle')} placeholder="Línea clara, realista..." className="h-10" />
-              </div>
+              <AutocompleteInput
+                label={t('comicDetail.drawingStyle')}
+                value={form.drawingStyle ?? ''}
+                onChange={(v) => setForm((p) => ({ ...p, drawingStyle: v }))}
+                suggestions={drawingStyleSugg}
+                placeholder="Línea clara, realista..."
+                className="[&_input]:h-10"
+              />
 
               {/* Synopsis */}
               <div className="space-y-1.5">
@@ -546,283 +599,10 @@ function EditSheet({ comicId, initial, open, onClose, focusOnCover }: {
   )
 }
 
-// ─── Add to Collection Sheet ─────────────────────────────────────────────────
-
-function AddToCollectionSheet({ comicId, open, onClose }: {
-  comicId: string
-  open: boolean
-  onClose: () => void
-}) {
-  const { t } = useTranslation()
-  const qc = useQueryClient()
-
-  const [selectedColId, setSelectedColId] = useState('')
-  const [colSearch, setColSearch] = useState('')
-  const [showColDropdown, setShowColDropdown] = useState(false)
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null)
-  const [creatingNewSeries, setCreatingNewSeries] = useState(false)
-  const [newSeriesName, setNewSeriesName] = useState('')
-  const [creatingNewCol, setCreatingNewCol] = useState(false)
-  const [newColName, setNewColName] = useState('')
-
-  const { data: allCollections = [] } = useQuery({
-    queryKey: ['collections'],
-    queryFn: collectionsApi.getAll,
-    staleTime: 60_000,
-  })
-
-  const { data: collectionSeries = [] } = useQuery({
-    queryKey: ['collection-series', selectedColId],
-    queryFn: () => collectionSeriesApi.getByCollection(selectedColId),
-    enabled: !!selectedColId && open,
-    staleTime: 30_000,
-  })
-
-  const filteredCols = allCollections.filter((c) =>
-    colSearch ? c.name.toLowerCase().includes(colSearch.toLowerCase()) : true
-  )
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      let resolvedColId = selectedColId
-      if (creatingNewCol && newColName.trim()) {
-        const newCol = await collectionsApi.create({ name: newColName.trim() })
-        resolvedColId = newCol.id
-      }
-
-      let resolvedSeriesId = selectedSeriesId
-      if (creatingNewSeries && newSeriesName.trim() && resolvedColId) {
-        const newSeries = await collectionSeriesApi.create(resolvedColId, newSeriesName.trim())
-        resolvedSeriesId = newSeries.id
-      }
-
-      if (resolvedSeriesId) {
-        await comicsApi.update(comicId, { collectionSeriesId: resolvedSeriesId })
-      } else if (resolvedColId) {
-        await collectionsApi.addComic(resolvedColId, comicId)
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['comic', comicId] })
-      qc.invalidateQueries({ queryKey: ['comic-collections', comicId] })
-      qc.invalidateQueries({ queryKey: ['collections'] })
-      qc.invalidateQueries({ queryKey: ['library'] })
-      toast.success(t('addSheet.savedToCollection'))
-      onClose()
-    },
-    onError: () => toast.error(t('common.error')),
-  })
-
-  const canSave = (selectedColId || (creatingNewCol && newColName.trim())) &&
-    !(creatingNewSeries && !newSeriesName.trim())
-
-  if (!open) return null
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60]" onClick={onClose} />
-
-      {/* Side sheet */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-md bg-background border-l border-border shadow-2xl z-[70] flex flex-col">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-border">
-          <h2 className="text-xl font-bold tracking-tight">{t('addSheet.titleCollection')}</h2>
-          <button onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors">
-            <X className="size-5 text-muted-foreground" />
-          </button>
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8">
-
-          {/* Field 1: Select Collection */}
-          <div className="space-y-3">
-            <label className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">
-              {t('addSheet.selectCollection')}
-            </label>
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowColDropdown((v) => !v)}
-                className="w-full bg-muted border border-border rounded-lg p-3 flex justify-between items-center hover:border-primary/50 transition-colors"
-              >
-                <span className="text-sm">
-                  {creatingNewCol && newColName
-                    ? newColName
-                    : allCollections.find((c) => c.id === selectedColId)?.name
-                    ?? t('addSheet.selectCollection')}
-                </span>
-                <ChevronDown className="size-4 text-muted-foreground shrink-0" />
-              </button>
-
-              {showColDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-background rounded-lg shadow-xl border border-border overflow-hidden z-10">
-                  <div className="p-3 border-b border-border">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-                      <Input
-                        value={colSearch}
-                        onChange={(e) => setColSearch(e.target.value)}
-                        placeholder={t('addSheet.searchCollections')}
-                        className="pl-7 h-8 text-xs"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {filteredCols.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedColId(c.id)
-                          setSelectedSeriesId(null)
-                          setCreatingNewSeries(false); setNewSeriesName('')
-                          setCreatingNewCol(false)
-                          setShowColDropdown(false); setColSearch('')
-                        }}
-                        className={`w-full px-4 py-2.5 text-xs flex items-center justify-between transition-colors ${
-                          c.id === selectedColId
-                            ? 'text-primary bg-primary/5'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                        }`}
-                      >
-                        <span>{c.name}</span>
-                        {c.id === selectedColId && <Check className="size-3.5 shrink-0" />}
-                      </button>
-                    ))}
-                    {filteredCols.length === 0 && (
-                      <p className="px-4 py-3 text-xs text-muted-foreground">{t('common.noResults')}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Create new collection */}
-            {!creatingNewCol ? (
-              <button
-                type="button"
-                onClick={() => { setCreatingNewCol(true); setSelectedColId('') }}
-                className="inline-flex items-center gap-1.5 text-primary text-[11px] font-bold uppercase tracking-widest hover:brightness-125 transition-all"
-              >
-                <Plus className="size-3.5" />
-                {t('addSheet.createNewCollection')}
-              </button>
-            ) : (
-              <div className="space-y-2">
-                <Input
-                  autoFocus
-                  value={newColName}
-                  onChange={(e) => setNewColName(e.target.value)}
-                  placeholder={t('addSheet.newCollectionPlaceholder')}
-                  className="h-8 text-sm"
-                />
-                <button type="button"
-                  onClick={() => { setCreatingNewCol(false); setNewColName('') }}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  {t('common.cancel')}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Field 2: Select Series (only when a collection is chosen) */}
-          {(selectedColId || creatingNewCol) && (
-            <div className="space-y-3">
-              <label className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">
-                {t('addSheet.assignSeries')}
-              </label>
-
-              <div className="space-y-1.5">
-                {collectionSeries.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSeriesId(selectedSeriesId === s.id ? null : s.id)
-                      setCreatingNewSeries(false)
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors border ${
-                      selectedSeriesId === s.id
-                        ? 'border-primary/30 bg-primary/5 text-primary font-medium'
-                        : 'border-border bg-muted hover:border-primary/20'
-                    }`}
-                  >
-                    <span className="truncate">{s.name}</span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      {s.isDefault && (
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                          {t('addSheet.defaultSeries')}
-                        </span>
-                      )}
-                      {selectedSeriesId === s.id && <Check className="size-3.5" />}
-                    </span>
-                  </button>
-                ))}
-
-                {!creatingNewSeries ? (
-                  <button
-                    type="button"
-                    onClick={() => { setCreatingNewSeries(true); setSelectedSeriesId(null) }}
-                    className="inline-flex items-center gap-1.5 text-primary text-[11px] font-bold uppercase tracking-widest hover:brightness-125 transition-all mt-1"
-                  >
-                    <Plus className="size-3.5" />
-                    {t('addSheet.createSeries')}
-                  </button>
-                ) : (
-                  <div className="space-y-2 mt-1">
-                    <Input
-                      autoFocus
-                      value={newSeriesName}
-                      onChange={(e) => setNewSeriesName(e.target.value)}
-                      placeholder={t('addSheet.seriesNamePlaceholder')}
-                      className="h-8 text-sm"
-                    />
-                    <button type="button"
-                      onClick={() => { setCreatingNewSeries(false); setNewSeriesName('') }}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                      {t('common.cancel')}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {!selectedSeriesId && !creatingNewSeries && (
-                <p className="text-[10px] text-muted-foreground/60 italic px-1">
-                  {t('addSheet.principalHint')}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-8 border-t border-border grid grid-cols-2 gap-4">
-          <Button variant="outline" onClick={onClose}
-            className="h-11 text-xs font-bold uppercase tracking-widest">
-            {t('common.cancel')}
-          </Button>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !canSave}
-            className="h-11 text-xs font-bold uppercase tracking-widest">
-            {saveMutation.isPending ? t('common.saving') : t('addSheet.saveToCollection')}
-          </Button>
-        </div>
-      </div>
-    </>
-  )
-}
-
 // ─── Collection Gallery ───────────────────────────────────────────────────────
 
 function CollectionGallery({ collections, currentComicId }: {
-  collections: Collection[]
+  collections: { id: string; name: string }[]
   currentComicId: string
 }) {
   const navigate = useNavigate()
@@ -861,7 +641,7 @@ function CollectionGallery({ collections, currentComicId }: {
           )}
         </div>
         {collections.length > 1 && (
-          <Select value={selectedCollectionId} onValueChange={setSelectedCollectionId}>
+          <Select value={selectedCollectionId} onValueChange={(v) => v !== null && setSelectedCollectionId(v)}>
             <SelectTrigger className="w-44 h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
@@ -890,7 +670,7 @@ function CollectionGallery({ collections, currentComicId }: {
             const hasSeries = seriesKey !== '__none__'
             const groupLabel = hasSeries ? `Serie: ${seriesKey}` : collectionName
             const sorted = [...items].sort((a, b) =>
-              (a.comic.issueNumber ?? 0) - (b.comic.issueNumber ?? 0)
+              parseInt(a.comic.issueNumber ?? '0', 10) - parseInt(b.comic.issueNumber ?? '0', 10)
             )
             return (
               <div key={seriesKey}>
@@ -966,6 +746,7 @@ export function ComicDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { t } = useTranslation()
+  const { user } = useAuth()
   const [notes, setNotes] = useState<string | undefined>(undefined)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -990,7 +771,6 @@ export function ComicDetailPage() {
     enabled: !!id,
   })
 
-  const [loanedToInput, setLoanedToInput] = useState<string | undefined>(undefined)
   const [isSaleOpen, setIsSaleOpen] = useState(false)
 
   const updateMutation = useMutation({
@@ -1165,9 +945,9 @@ export function ComicDetailPage() {
               <div className="lg:col-span-8 flex flex-col gap-6">
 
                 {/* Series label */}
-                {comic.collectionSeries?.name && (
+                {userComic?.collectionSeries?.name && (
                   <span className="text-primary font-semibold text-sm uppercase tracking-widest">
-                    {comic.collectionSeries.name}
+                    {userComic.collectionSeries.name}
                   </span>
                 )}
 
@@ -1253,7 +1033,6 @@ export function ComicDetailPage() {
                       {userComic.collectionStatus === 'LOANED' && (
                         <Input className="h-8 text-sm max-w-52" placeholder={t('comicDetail.loanedToPlaceholder')}
                           defaultValue={userComic.loanedTo ?? ''}
-                          onChange={(e) => setLoanedToInput(e.target.value)}
                           onBlur={(e) => updateMutation.mutate({ loanedTo: e.target.value })} />
                       )}
                     </div>
@@ -1297,7 +1076,7 @@ export function ComicDetailPage() {
                           <>
                             <div className="fixed inset-0 z-10" onClick={() => setIsSaleOpen(false)} />
                             <div className="absolute top-full left-0 mt-1.5 z-20 bg-popover border border-border rounded-xl shadow-xl overflow-hidden min-w-[160px]">
-                              {saleStatusItems.map(({ value, label, activeClass }) => (
+                              {saleStatusItems.map(({ value, label }) => (
                                 <button key={value}
                                   onClick={() => {
                                     updateMutation.mutate({ saleStatus: value })
@@ -1520,10 +1299,16 @@ export function ComicDetailPage() {
       {/* Add to Collection sheet */}
       {comic && (
         <AddToCollectionSheet
-          key={String(isAddToCollectionOpen)}
-          comicId={comic.id}
+          mode="single"
           open={isAddToCollectionOpen}
-          onClose={() => setIsAddToCollectionOpen(false)}
+          onOpenChange={setIsAddToCollectionOpen}
+          selectedComicIds={[comic.id]}
+          currentCollectionId={userComic?.collectionSeries?.collectionId}
+          currentSeriesId={userComic?.collectionSeriesId ?? undefined}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['user-comic', id] })
+            qc.invalidateQueries({ queryKey: ['comic-collections', id] })
+          }}
         />
       )}
 
@@ -1531,23 +1316,25 @@ export function ComicDetailPage() {
       {comic && (
         <EditSheet
           comicId={comic.id}
+          isCreator={!!user && comic.createdBy === user.id}
           open={isEditOpen}
           onClose={() => { setIsEditOpen(false); setEditFocusCover(false) }}
           focusOnCover={editFocusCover}
           initial={{
-            title: comic.title,
-            publisher: comic.publisher,
-            year: comic.year,
-            synopsis: comic.synopsis,
-            coverUrl: comic.coverUrl,
+            title: userComic?.titleOverride ?? comic.title,
+            issueNumber: userComic?.issueNumberOverride ?? comic.issueNumber,
+            publisher: userComic?.publisherOverride ?? comic.publisher,
+            year: userComic?.yearOverride ?? comic.year,
+            synopsis: userComic?.synopsisOverride ?? comic.synopsis,
+            coverUrl: userComic?.coverUrlOverride ?? comic.coverUrl,
             isbn: comic.isbn,
-            binding: comic.binding,
-            drawingStyle: comic.drawingStyle,
-            authors: comic.authors,
-            scriptwriter: comic.scriptwriter,
-            artist: comic.artist,
-            collectionSeriesId: comic.collectionSeriesId,
-            collectionSeries: comic.collectionSeries,
+            binding: userComic?.bindingOverride ?? comic.binding,
+            drawingStyle: userComic?.drawingStyleOverride ?? comic.drawingStyle,
+            authors: userComic?.authorsOverride ?? comic.authors,
+            scriptwriter: userComic?.scriptwriterOverride ?? comic.scriptwriter,
+            artist: userComic?.artistOverride ?? comic.artist,
+            collectionSeriesId: userComic?.collectionSeriesId,
+            collectionSeries: userComic?.collectionSeries,
           }}
         />
       )}
@@ -1565,35 +1352,6 @@ function MetaCell({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{label}</span>
       <span className="text-base font-medium leading-tight">{value}</span>
-    </div>
-  )
-}
-
-// Keep for potential future use
-function _SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{children}</h2>
-}
-
-interface DataItem { label: string; value?: string | null; link?: boolean }
-
-function _DataGrid({ items }: { items: DataItem[] }) {
-  const filtered = items.filter((i) => i.value)
-  if (!filtered.length) return null
-  return (
-    <div className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5">
-      {filtered.map(({ label, value, link }) => (
-        <Fragment key={label}>
-          <span className="text-xs text-muted-foreground">{label}</span>
-          {link ? (
-            <a href={value!} target="_blank" rel="noopener noreferrer"
-              className="text-xs flex items-center gap-1 text-primary hover:underline">
-              {value}<ExternalLink className="size-3" />
-            </a>
-          ) : (
-            <span className="text-xs font-medium">{value}</span>
-          )}
-        </Fragment>
-      ))}
     </div>
   )
 }

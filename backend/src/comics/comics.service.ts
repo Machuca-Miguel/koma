@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateComicDto } from './dto/create-comic.dto';
 import { UpdateComicDto } from './dto/update-comic.dto';
@@ -47,12 +51,15 @@ export class ComicsService {
     return comic;
   }
 
-  async create(dto: CreateComicDto) {
-    return this.prisma.comic.create({ data: dto });
+  async create(dto: CreateComicDto, userId: string) {
+    return this.prisma.comic.create({ data: { ...dto, createdBy: userId } });
   }
 
-  async update(id: string, dto: UpdateComicDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateComicDto, userId: string) {
+    const comic = await this.findOne(id);
+    if (comic.createdBy !== userId) {
+      throw new ForbiddenException('Solo el creador del cómic puede editarlo');
+    }
     return this.prisma.comic.update({ where: { id }, data: dto });
   }
 
@@ -88,17 +95,17 @@ export class ComicsService {
     return this.findOne(comicId);
   }
 
-  async getCollections(comicId: string) {
-    const comic = await this.prisma.comic.findUnique({
-      where: { id: comicId },
+  async getCollections(comicId: string, userId: string) {
+    const userComic = await this.prisma.userComic.findUnique({
+      where: { userId_comicId: { userId, comicId } },
       include: {
         collectionSeries: {
           include: { collection: { select: { id: true, name: true } } },
         },
       },
     });
-    if (!comic?.collectionSeries) return [];
-    return [comic.collectionSeries.collection];
+    if (!userComic?.collectionSeries) return [];
+    return [userComic.collectionSeries.collection];
   }
 
   async getTagsByUser(userId: string) {

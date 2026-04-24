@@ -37,4 +37,11 @@ export class CreateCollectionDto {
   @IsOptional()
   rating?: number;
 
+  @ApiPropertyOptional({ example: 'Principal', description: 'Nombre de la serie inicial (default: "Principal")' })
+  @IsString()
+  @IsOptional()
+  @MinLength(1)
+  @MaxLength(100)
+  initialSeriesName?: string;
+
 }

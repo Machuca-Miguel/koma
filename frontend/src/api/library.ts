@@ -49,6 +49,19 @@ export const libraryApi = {
     loanedTo?: string
     rating?: number
     notes?: string
+    collectionSeriesId?: string | null
+    // Override fields for non-creators
+    titleOverride?: string | null
+    issueNumberOverride?: string | null
+    publisherOverride?: string | null
+    yearOverride?: number | null
+    synopsisOverride?: string | null
+    coverUrlOverride?: string | null
+    bindingOverride?: string | null
+    drawingStyleOverride?: string | null
+    authorsOverride?: string | null
+    scriptwriterOverride?: string | null
+    artistOverride?: string | null
   }) =>
     api.patch<UserComic>(`/my-library/${comicId}`, data).then((r) => r.data),
 
@@ -72,6 +85,9 @@ export const libraryApi = {
 
   reorderSeries: (collectionSeriesId: string, positions: { comicId: string; position: number }[]) =>
     api.patch<{ updated: number }>(`/my-library/series/${collectionSeriesId}/reorder`, { positions }).then((r) => r.data),
+
+  addMultipleToCollection: (data: { comicIds: string[]; collectionSeriesId: string }) =>
+    api.post<{ updated: number }>('/my-library/to-collection', data).then((r) => r.data),
 
   importCsv: (file: File) => {
     const form = new FormData()

@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 function groupBySeries(comics: UserComic[]): [string, UserComic[]][] {
   const map = new Map<string, UserComic[]>()
   for (const uc of comics) {
-    const key = uc.comic.collectionSeries?.name ?? ''
+    const key = uc.collectionSeries?.name ?? ''
     if (!key) continue
     const arr = map.get(key) ?? []
     arr.push(uc)

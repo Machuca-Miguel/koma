@@ -33,19 +33,16 @@ export const comicsApi = {
 
   update: (comicId: string, data: {
     title?: string
+    issueNumber?: string
     publisher?: string
     year?: number
     synopsis?: string
     coverUrl?: string
-    isbn?: string
     binding?: BindingFormat | null
     drawingStyle?: string
-    series?: string
     authors?: string
     scriptwriter?: string
     artist?: string
-    seriesId?: string | null
-    collectionSeriesId?: string | null
   }) => api.patch<Comic>(`/comics/${comicId}`, data).then((r) => r.data),
 
   getTags: () =>

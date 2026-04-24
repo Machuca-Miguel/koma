@@ -9,6 +9,7 @@ import { CollectionsService } from './collections.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const mockPrisma = {
+  $transaction: jest.fn().mockImplementation((fn: (tx: typeof mockPrisma) => unknown) => fn(mockPrisma)),
   collection: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
@@ -16,14 +17,16 @@ const mockPrisma = {
     update: jest.fn(),
     delete: jest.fn(),
   },
-  collectionComic: {
+  collectionSeries: {
+    findFirst: jest.fn(),
+    create: jest.fn(),
+  },
+  userComic: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
-    create: jest.fn(),
-    delete: jest.fn(),
-  },
-  comic: {
-    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    groupBy: jest.fn(),
   },
 };
 
@@ -33,10 +36,15 @@ const MOCK_COLLECTION = {
   userId: 'user-1',
   isPublic: false,
   createdAt: new Date(),
-  _count: { comics: 0 },
+  series: [],
 };
 
-const MOCK_COMIC = { id: 'comic-1', title: 'Batman #1' };
+const MOCK_DEFAULT_SERIES = {
+  id: 'series-1',
+  name: 'Principal',
+  collectionId: 'col-1',
+  isDefault: true,
+};
 
 describe('CollectionsService', () => {
   let service: CollectionsService;
@@ -56,6 +64,8 @@ describe('CollectionsService', () => {
   describe('findAllByUser', () => {
     it('returns collections for user', async () => {
       mockPrisma.collection.findMany.mockResolvedValue([MOCK_COLLECTION]);
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
+      mockPrisma.userComic.groupBy.mockResolvedValue([]);
 
       const result = await service.findAllByUser('user-1');
 
@@ -69,9 +79,10 @@ describe('CollectionsService', () => {
   describe('findOne', () => {
     it('returns collection when found and user matches', async () => {
       mockPrisma.collection.findUnique.mockResolvedValue(MOCK_COLLECTION);
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
 
       const result = await service.findOne('col-1', 'user-1');
-      expect(result).toEqual(MOCK_COLLECTION);
+      expect(result).toMatchObject({ id: 'col-1', name: 'My Collection' });
     });
 
     it('throws NotFoundException when collection does not exist', async () => {
@@ -98,6 +109,7 @@ describe('CollectionsService', () => {
         ...MOCK_COLLECTION,
         isPublic: true,
       });
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
 
       const result = await service.findOne('col-1', 'other-user');
       expect(result).toBeDefined();
@@ -105,17 +117,35 @@ describe('CollectionsService', () => {
   });
 
   describe('create', () => {
-    it('creates collection with userId', async () => {
+    it('creates collection and default series atomically', async () => {
       mockPrisma.collection.create.mockResolvedValue(MOCK_COLLECTION);
+      mockPrisma.collectionSeries.create.mockResolvedValue(MOCK_DEFAULT_SERIES);
 
-      await service.create('user-1', { name: 'My Collection' });
+      const result = await service.create('user-1', { name: 'My Collection' });
 
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.collection.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            userId: 'user-1',
-            name: 'My Collection',
-          }),
+          data: expect.objectContaining({ userId: 'user-1', name: 'My Collection' }),
+        }),
+      );
+      expect(mockPrisma.collectionSeries.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collectionId: 'col-1', isDefault: true, name: 'Principal' }),
+        }),
+      );
+      expect(result).toEqual({ collection: MOCK_COLLECTION, series: MOCK_DEFAULT_SERIES });
+    });
+
+    it('uses initialSeriesName when provided', async () => {
+      mockPrisma.collection.create.mockResolvedValue(MOCK_COLLECTION);
+      mockPrisma.collectionSeries.create.mockResolvedValue({ ...MOCK_DEFAULT_SERIES, name: 'Arco principal' });
+
+      await service.create('user-1', { name: 'My Collection', initialSeriesName: 'Arco principal' });
+
+      expect(mockPrisma.collectionSeries.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ name: 'Arco principal' }),
         }),
       );
     });
@@ -129,9 +159,7 @@ describe('CollectionsService', () => {
         name: 'Updated',
       });
 
-      const result = await service.update('col-1', 'user-1', {
-        name: 'Updated',
-      });
+      const result = await service.update('col-1', 'user-1', { name: 'Updated' });
       expect(result.name).toBe('Updated');
     });
 
@@ -175,34 +203,44 @@ describe('CollectionsService', () => {
   });
 
   describe('addComic', () => {
-    it('adds comic to collection', async () => {
+    it('adds comic to default series of collection', async () => {
       mockPrisma.collection.findUnique.mockResolvedValue(MOCK_COLLECTION);
-      mockPrisma.comic.findUnique.mockResolvedValue(MOCK_COMIC);
-      mockPrisma.collectionComic.findUnique.mockResolvedValue(null);
-      mockPrisma.collectionComic.create.mockResolvedValue({
-        collectionId: 'col-1',
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
+      mockPrisma.userComic.findUnique.mockResolvedValue({
+        id: 'uc-1',
+        userId: 'user-1',
         comicId: 'comic-1',
+        collectionSeriesId: null,
       });
+      mockPrisma.collectionSeries.findFirst.mockResolvedValue(MOCK_DEFAULT_SERIES);
+      mockPrisma.userComic.update.mockResolvedValue({});
 
       await service.addComic('col-1', 'user-1', 'comic-1');
-      expect(mockPrisma.collectionComic.create).toHaveBeenCalled();
+      expect(mockPrisma.userComic.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collectionSeriesId: 'series-1' }),
+        }),
+      );
     });
 
-    it('throws NotFoundException when comic does not exist', async () => {
+    it('throws NotFoundException when comic not in user library', async () => {
       mockPrisma.collection.findUnique.mockResolvedValue(MOCK_COLLECTION);
-      mockPrisma.comic.findUnique.mockResolvedValue(null);
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
+      mockPrisma.userComic.findUnique.mockResolvedValue(null);
 
       await expect(
         service.addComic('col-1', 'user-1', 'bad-comic'),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ConflictException when comic already in collection', async () => {
+    it('throws ConflictException when comic already assigned to a series', async () => {
       mockPrisma.collection.findUnique.mockResolvedValue(MOCK_COLLECTION);
-      mockPrisma.comic.findUnique.mockResolvedValue(MOCK_COMIC);
-      mockPrisma.collectionComic.findUnique.mockResolvedValue({
-        collectionId: 'col-1',
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
+      mockPrisma.userComic.findUnique.mockResolvedValue({
+        id: 'uc-1',
+        userId: 'user-1',
         comicId: 'comic-1',
+        collectionSeriesId: 'some-series',
       });
 
       await expect(
@@ -212,21 +250,29 @@ describe('CollectionsService', () => {
   });
 
   describe('removeComic', () => {
-    it('removes comic from collection', async () => {
+    it('removes comic from collection (clears series assignment)', async () => {
       mockPrisma.collection.findUnique.mockResolvedValue(MOCK_COLLECTION);
-      mockPrisma.collectionComic.findUnique.mockResolvedValue({
-        collectionId: 'col-1',
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
+      mockPrisma.userComic.findFirst.mockResolvedValue({
+        id: 'uc-1',
+        userId: 'user-1',
         comicId: 'comic-1',
+        collectionSeriesId: 'series-1',
       });
-      mockPrisma.collectionComic.delete.mockResolvedValue({});
+      mockPrisma.userComic.update.mockResolvedValue({});
 
       await service.removeComic('col-1', 'user-1', 'comic-1');
-      expect(mockPrisma.collectionComic.delete).toHaveBeenCalled();
+      expect(mockPrisma.userComic.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collectionSeriesId: null }),
+        }),
+      );
     });
 
     it('throws NotFoundException when comic not in collection', async () => {
       mockPrisma.collection.findUnique.mockResolvedValue(MOCK_COLLECTION);
-      mockPrisma.collectionComic.findUnique.mockResolvedValue(null);
+      mockPrisma.userComic.findMany.mockResolvedValue([]);
+      mockPrisma.userComic.findFirst.mockResolvedValue(null);
 
       await expect(
         service.removeComic('col-1', 'user-1', 'comic-1'),

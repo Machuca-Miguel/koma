@@ -204,7 +204,6 @@ export function ExternalComicDetailPage() {
         book={book}
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        mode="library"
       />
     </PageContainer>
   )

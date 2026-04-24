@@ -24,3 +24,6 @@ coverage/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Graphify outputs — never re-extract generated files
+graphify-out/

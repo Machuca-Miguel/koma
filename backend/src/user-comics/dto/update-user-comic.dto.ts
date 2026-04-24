@@ -6,8 +6,9 @@ import {
   Min,
   Max,
   IsIn,
+  IsEnum,
 } from 'class-validator';
-import { CollectionStatus, ReadStatus, SaleStatus } from '@prisma/client';
+import { BindingFormat, CollectionStatus, ReadStatus, SaleStatus } from '@prisma/client';
 
 const COLLECTION_STATUS_VALUES = [...Object.values(CollectionStatus), null];
 const READ_STATUS_VALUES = [...Object.values(ReadStatus), null];
@@ -48,4 +49,64 @@ export class UpdateUserComicDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @ApiPropertyOptional({ description: 'ID de la CollectionSeries del usuario (null = sin serie)', nullable: true })
+  @IsString()
+  @IsOptional()
+  collectionSeriesId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Override de título (solo para no-creadores)' })
+  @IsString()
+  @IsOptional()
+  titleOverride?: string | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  issueNumberOverride?: string | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  publisherOverride?: string | null;
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @IsOptional()
+  yearOverride?: number | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  synopsisOverride?: string | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  coverUrlOverride?: string | null;
+
+  @ApiPropertyOptional({ enum: BindingFormat })
+  @IsEnum(BindingFormat)
+  @IsOptional()
+  bindingOverride?: BindingFormat | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  drawingStyleOverride?: string | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  authorsOverride?: string | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  scriptwriterOverride?: string | null;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  artistOverride?: string | null;
 }

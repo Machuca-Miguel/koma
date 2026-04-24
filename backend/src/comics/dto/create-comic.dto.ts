@@ -44,10 +44,10 @@ export class CreateComicDto {
   @IsOptional()
   coverUrl?: string;
 
-  @ApiPropertyOptional({ example: '978-84-679-1234-5' })
+  @ApiProperty({ example: '978-84-679-1234-5', description: 'ISBN obligatorio, no editable tras creación' })
   @IsString()
-  @IsOptional()
-  isbn?: string;
+  @IsNotEmpty()
+  isbn: string;
 
   @ApiPropertyOptional({ enum: BindingFormat, nullable: true })
   @IsEnum(BindingFormat)
@@ -74,8 +74,4 @@ export class CreateComicDto {
   @IsOptional()
   artist?: string;
 
-  @ApiPropertyOptional({ description: 'ID de la CollectionSeries a la que pertenece este cómic' })
-  @IsString()
-  @IsOptional()
-  collectionSeriesId?: string;
 }

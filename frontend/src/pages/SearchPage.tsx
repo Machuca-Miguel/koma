@@ -1,23 +1,21 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Barcode, BookOpen, Search, Plus, Check, Copy,
   ChevronLeft, User, Building2, Tag, SlidersHorizontal,
-  X, CheckSquare, Folders, PenLine, Globe, Hash as HashIcon,
-  ChevronDown, FolderOpen,
+  X, PenLine, Globe, Hash as HashIcon,
   ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { isbndbApi } from '@/api/isbndb'
 import { libraryApi } from '@/api/library'
-import { collectionsApi } from '@/api/collections'
 import { comicsApi } from '@/api/comics'
 import type { IsbndbBook } from '@/api/isbndb'
 import type { BindingFormat } from '@/types'
-import { AddToCollectionDialog } from '@/components/features/AddToCollectionDialog'
 import { AddToSheet } from '@/components/features/AddToSheet'
+import { AutocompleteInput } from '@/components/ui/autocomplete-input'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -31,15 +29,12 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { PageHeader } from '@/components/layout/PageHeader'
 
 type TabId = 'books' | 'isbn' | 'authors' | 'publishers' | 'subjects'
 
-const BINDING_OPTIONS: BindingFormat[] = ['CARTONE', 'TAPA_BLANDA', 'BOLSILLO', 'OMNIBUS', 'HARDCOVER', 'DIGITAL']
+const BINDING_OPTIONS: BindingFormat[] = ['CARTONE', 'TAPA_BLANDA', 'BOLSILLO', 'OMNIBUS', 'HARDCOVER', 'DIGITAL' , 'OTHER']
 
 // ─── Color helper ─────────────────────────────────────────────────────────────
 
@@ -75,9 +70,10 @@ const LANGUAGES = [
 // ─── Create Manual Comic Sheet ────────────────────────────────────────────────
 
 const EMPTY_FORM = {
-  title: '', issueNumber: '', publisher: '',
+  title: '', publisher: '',
   year: '', isbn: '', binding: '' as BindingFormat | '',
   coverUrl: '', drawingStyle: '', synopsis: '',
+  authors: '', scriptwriter: '', artist: '',
 }
 
 export function CreateManualComicSheet({ open, onOpenChange }: {
@@ -87,19 +83,34 @@ export function CreateManualComicSheet({ open, onOpenChange }: {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [form, setForm] = useState(EMPTY_FORM)
-  const [collectionSearch, setCollectionSearch] = useState('')
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null)
-  const [creatingNewCollection, setCreatingNewCollection] = useState(false)
-  const [newCollectionName, setNewCollectionName] = useState('')
 
-  const { data: collections = [] } = useQuery({
-    queryKey: ['collections'],
-    queryFn: collectionsApi.getAll,
+  const { data: libraryData } = useQuery({
+    queryKey: ['library'],
+    queryFn: () => libraryApi.getAll({ limit: 200 }),
     enabled: open,
+    staleTime: 60_000,
   })
 
-  const filteredCollections = collections.filter((c) =>
-    collectionSearch ? c.name.toLowerCase().includes(collectionSearch.toLowerCase()) : true
+  const libraryComics = libraryData?.data ?? []
+  const publisherSuggestions = useMemo(() =>
+    [...new Set(libraryComics.map((uc) => uc.comic.publisher).filter(Boolean) as string[])],
+    [libraryComics]
+  )
+  const scriptwriterSuggestions = useMemo(() =>
+    [...new Set(libraryComics.map((uc) => uc.comic.scriptwriter).filter(Boolean) as string[])],
+    [libraryComics]
+  )
+  const artistSuggestions = useMemo(() =>
+    [...new Set(libraryComics.map((uc) => uc.comic.artist).filter(Boolean) as string[])],
+    [libraryComics]
+  )
+  const authorsSuggestions = useMemo(() =>
+    [...new Set(libraryComics.map((uc) => uc.comic.authors).filter(Boolean) as string[])],
+    [libraryComics]
+  )
+  const drawingStyleSuggestions = useMemo(() =>
+    [...new Set(libraryComics.map((uc) => uc.comic.drawingStyle).filter(Boolean) as string[])],
+    [libraryComics]
   )
 
   const set = (key: keyof typeof EMPTY_FORM) =>
@@ -108,10 +119,6 @@ export function CreateManualComicSheet({ open, onOpenChange }: {
 
   function handleClose() {
     setForm(EMPTY_FORM)
-    setCollectionSearch('')
-    setSelectedCollectionId(null)
-    setCreatingNewCollection(false)
-    setNewCollectionName('')
     onOpenChange(false)
   }
 
@@ -119,7 +126,6 @@ export function CreateManualComicSheet({ open, onOpenChange }: {
     mutationFn: async () => {
       const comic = await comicsApi.create({
         title: form.title.trim(),
-        issueNumber: form.issueNumber.trim() || undefined,
         publisher: form.publisher.trim() || undefined,
         year: form.year ? Number(form.year) : undefined,
         isbn: form.isbn.trim() || undefined,
@@ -127,24 +133,17 @@ export function CreateManualComicSheet({ open, onOpenChange }: {
         coverUrl: form.coverUrl.trim() || undefined,
         drawingStyle: form.drawingStyle.trim() || undefined,
         synopsis: form.synopsis.trim() || undefined,
+        authors: form.authors.trim() || undefined,
+        scriptwriter: form.scriptwriter.trim() || undefined,
+        artist: form.artist.trim() || undefined,
       })
       try { await libraryApi.add({ comicId: comic.id, collectionStatus: 'IN_COLLECTION' }) }
       catch (err: unknown) { if ((err as { response?: { status?: number } })?.response?.status !== 409) throw err }
-      let targetCollectionId = selectedCollectionId
-      if (creatingNewCollection && newCollectionName.trim()) {
-        const col = await collectionsApi.create({ name: newCollectionName.trim(), isPublic: false })
-        targetCollectionId = col.id
-        qc.invalidateQueries({ queryKey: ['collections'] })
-      }
-      if (targetCollectionId) {
-        await collectionsApi.addComic(targetCollectionId, comic.id).catch(() => {})
-      }
       return comic
     },
     onSuccess: () => {
       toast.success(t('search.createManual.success'))
       qc.invalidateQueries({ queryKey: ['library'] })
-      qc.invalidateQueries({ queryKey: ['collections'] })
       handleClose()
     },
     onError: () => toast.error(t('search.createManual.error')),
@@ -161,15 +160,14 @@ export function CreateManualComicSheet({ open, onOpenChange }: {
             <label className="text-sm font-medium">{t('search.createManual.fields.title')}</label>
             <Input value={form.title} onChange={set('title')} autoFocus className="h-10" />
           </div>
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">{t('search.createManual.fields.issueNumber')}</label>
-            <Input value={form.issueNumber} onChange={set('issueNumber')} placeholder="#1" className="h-10" />
-          </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">{t('search.createManual.fields.publisher')}</label>
-              <Input value={form.publisher} onChange={set('publisher')} className="h-10" />
-            </div>
+            <AutocompleteInput
+              label={t('search.createManual.fields.publisher')}
+              value={form.publisher}
+              onChange={(v) => setForm((p) => ({ ...p, publisher: v }))}
+              suggestions={publisherSuggestions}
+              className="[&_input]:h-10"
+            />
             <div className="grid gap-2">
               <label className="text-sm font-medium">{t('search.createManual.fields.year')}</label>
               <Input type="number" value={form.year} onChange={set('year')} min={1800} max={2099} placeholder="2024" className="h-10" />
@@ -204,63 +202,40 @@ export function CreateManualComicSheet({ open, onOpenChange }: {
             <label className="text-sm font-medium">{t('search.createManual.fields.coverUrl')}</label>
             <Input value={form.coverUrl} onChange={set('coverUrl')} placeholder="https://..." className="h-10" />
           </div>
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">{t('search.createManual.fields.drawingStyle')}</label>
-            <Input value={form.drawingStyle} onChange={set('drawingStyle')} placeholder="Línea clara, realista..." className="h-10" />
-          </div>
+          <AutocompleteInput
+            label={t('search.createManual.fields.drawingStyle')}
+            value={form.drawingStyle}
+            onChange={(v) => setForm((p) => ({ ...p, drawingStyle: v }))}
+            suggestions={drawingStyleSuggestions}
+            placeholder="Línea clara, realista..."
+            className="[&_input]:h-10"
+          />
           <div className="grid gap-2">
             <label className="text-sm font-medium">{t('search.createManual.fields.synopsis')}</label>
             <Textarea value={form.synopsis} onChange={set('synopsis')} rows={3} />
           </div>
-          <Separator />
-          <div className=" grid gap-2">
-            <label className="text-sm font-medium">{t('search.createManual.collection')}</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-              <Input
-                value={collectionSearch}
-                onChange={(e) => { setCollectionSearch(e.target.value); setCreatingNewCollection(false) }}
-                placeholder={t('search.createManual.collectionSearch')}
-                className="pl-9 h-10"
-              />
-            </div>
-            <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border p-1.5">
-              {filteredCollections.length === 0 && !creatingNewCollection ? (
-                <p className="text-sm text-muted-foreground text-center py-3">{t('collections.emptyState')}</p>
-              ) : (
-                filteredCollections.map((col) => (
-                  <button
-                    key={col.id}
-                    type="button"
-                    onClick={() => { setSelectedCollectionId(selectedCollectionId === col.id ? null : col.id); setCreatingNewCollection(false) }}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between gap-2 transition-colors ${
-                      selectedCollectionId === col.id
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'hover:bg-muted/50 text-foreground'
-                    }`}
-                  >
-                    <span className="truncate">{col.name}</span>
-                    {selectedCollectionId === col.id && <Check className="size-3.5 shrink-0" />}
-                  </button>
-                ))
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => { setCreatingNewCollection((v) => !v); setSelectedCollectionId(null) }}
-              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${creatingNewCollection ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <Plus className="size-4" />{t('collections.createTitle')}
-            </button>
-            {creatingNewCollection && (
-              <Input
-                autoFocus
-                value={newCollectionName}
-                onChange={(e) => setNewCollectionName(e.target.value)}
-                placeholder={t('collections.namePlaceholder')}
-                className="h-10"
-              />
-            )}
+          <AutocompleteInput
+            label={t('search.createManual.fields.authors')}
+            value={form.authors}
+            onChange={(v) => setForm((p) => ({ ...p, authors: v }))}
+            suggestions={authorsSuggestions}
+            className="[&_input]:h-10"
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <AutocompleteInput
+              label={t('search.createManual.fields.scriptwriter')}
+              value={form.scriptwriter}
+              onChange={(v) => setForm((p) => ({ ...p, scriptwriter: v }))}
+              suggestions={scriptwriterSuggestions}
+              className="[&_input]:h-10"
+            />
+            <AutocompleteInput
+              label={t('search.createManual.fields.artist')}
+              value={form.artist}
+              onChange={(v) => setForm((p) => ({ ...p, artist: v }))}
+              suggestions={artistSuggestions}
+              className="[&_input]:h-10"
+            />
           </div>
         </div>
         <div className="sheet-footer">
@@ -268,28 +243,26 @@ export function CreateManualComicSheet({ open, onOpenChange }: {
           <Button
             size="xl"
             onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending || !form.title.trim() || (creatingNewCollection && !newCollectionName.trim())}
+            disabled={createMutation.isPending || !form.title.trim()}
             className="flex-1"
           >
             {createMutation.isPending ? t('common.saving') : t('common.add')}
           </Button>
         </div>
       </SheetContent>
-    </Sheet>  
+    </Sheet>
   )
 }
 
-// ─── Add Button (dropdown) ────────────────────────────────────────────────────
+// ─── Add Button ───────────────────────────────────────────────────────────────
 
 function AddButton({
-  book, isAdded, isPending,
-  onOpenLibrarySheet, onOpenCollectionSheet,
+  book, isAdded, isPending, onOpenLibrarySheet,
 }: {
   book: IsbndbBook
   isAdded: boolean
   isPending: boolean
   onOpenLibrarySheet: (b: IsbndbBook) => void
-  onOpenCollectionSheet: (b: IsbndbBook) => void
 }) {
   const { t } = useTranslation()
   if (isAdded) {
@@ -301,42 +274,22 @@ function AddButton({
     )
   }
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          size="sm" variant="default"
-          className="h-7 text-xs gap-1 shrink-0"
-          disabled={isPending}
-        >
-          <Plus className="size-3" />
-          {t('isbndb.addToLabel')}
-          <ChevronDown className="size-3 opacity-70" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem onClick={() => onOpenLibrarySheet(book)} className="hover:bg-muted focus:bg-muted">
-          <BookOpen className="size-3.5 mr-2" />
-          {t('isbndb.addToLibraryOption')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onOpenCollectionSheet(book)} className="hover:bg-muted focus:bg-muted">
-          <FolderOpen className="size-3.5 mr-2" />
-          {t('isbndb.addToCollectionOption')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button size="sm" variant="default" className="h-7 text-xs gap-1 shrink-0" disabled={isPending} onClick={() => onOpenLibrarySheet(book)}>
+      <Plus className="size-3" />
+      {t('isbndb.addToLibrary')}
+    </Button>
   )
 }
 
 // ─── BookCard ─────────────────────────────────────────────────────────────────
 
-function BookCard({ book, addedIds, isPending, isSelected, onToggleSelect, onOpenLibrarySheet, onOpenCollectionSheet, onNavigateToDetail }: {
+function BookCard({ book, addedIds, isPending, isSelected, onToggleSelect, onOpenLibrarySheet, onNavigateToDetail }: {
   book: IsbndbBook
   addedIds: Set<string>
   isPending: boolean
   isSelected?: boolean
   onToggleSelect?: (book: IsbndbBook) => void
   onOpenLibrarySheet?: (book: IsbndbBook) => void
-  onOpenCollectionSheet?: (book: IsbndbBook) => void
   onNavigateToDetail?: (isbn: string) => void
 }) {
   const { t } = useTranslation()
@@ -437,16 +390,14 @@ function BookCard({ book, addedIds, isPending, isSelected, onToggleSelect, onOpe
             <Copy className="size-2.5 opacity-50" />
           </button>
           <div className="ml-auto">
-            {onOpenLibrarySheet && onOpenCollectionSheet ? (
+            {onOpenLibrarySheet && (
               <AddButton
                 book={book}
                 isAdded={isAdded}
                 isPending={isPending}
-                addedIds={addedIds}
                 onOpenLibrarySheet={onOpenLibrarySheet}
-                onOpenCollectionSheet={onOpenCollectionSheet}
               />
-            ) : null}
+            )}
           </div>
         </div>
       )}
@@ -483,7 +434,7 @@ function Pagination({ page, totalPages, onPage }: { page: number; totalPages: nu
 
 // ─── BookGrid ─────────────────────────────────────────────────────────────────
 
-function BookGrid({ books, addedIds, isPending, isLoading, emptyMsg, selectedIsbnIds, onToggleIsbnSelect, onOpenLibrarySheet, onOpenCollectionSheet, onNavigateToDetail, page, totalPages, onPage, total }: {
+function BookGrid({ books, addedIds, isPending, isLoading, emptyMsg, selectedIsbnIds, onToggleIsbnSelect, onOpenLibrarySheet, onNavigateToDetail, page, totalPages, onPage, total }: {
   books: IsbndbBook[]
   addedIds: Set<string>
   isPending: boolean
@@ -492,7 +443,6 @@ function BookGrid({ books, addedIds, isPending, isLoading, emptyMsg, selectedIsb
   selectedIsbnIds?: Set<string>
   onToggleIsbnSelect?: (book: IsbndbBook) => void
   onOpenLibrarySheet?: (book: IsbndbBook) => void
-  onOpenCollectionSheet?: (book: IsbndbBook) => void
   onNavigateToDetail?: (isbn: string) => void
   page?: number
   totalPages?: number
@@ -523,7 +473,6 @@ function BookGrid({ books, addedIds, isPending, isLoading, emptyMsg, selectedIsb
             isSelected={selectedIsbnIds?.has(getIsbn(book))}
             onToggleSelect={onToggleIsbnSelect}
             onOpenLibrarySheet={onOpenLibrarySheet}
-            onOpenCollectionSheet={onOpenCollectionSheet}
             onNavigateToDetail={onNavigateToDetail}
           />
         ))}
@@ -591,7 +540,7 @@ function FiltersPanel({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">{t('isbndb.filterLanguage')}</label>
-          <Select value={language} onValueChange={setLanguage}>
+          <Select value={language} onValueChange={(v) => v !== null && setLanguage(v)}>
             <SelectTrigger className="h-8 text-xs">
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               <SelectValue>{t((LANGUAGES.find((l) => l.code === language)?.label ?? 'isbndb.langAll') as any)}</SelectValue>
@@ -637,14 +586,13 @@ function FiltersPanel({
 
 // ─── Tab: Libros ──────────────────────────────────────────────────────────────
 
-function TabBooks({ q, addedIds, isPending, selectedIsbnIds, onToggleIsbnSelect, onOpenLibrarySheet, onOpenCollectionSheet, onCreateManual }: {
+function TabBooks({ q, addedIds, isPending, selectedIsbnIds, onToggleIsbnSelect, onOpenLibrarySheet, onCreateManual }: {
   q: string
   addedIds: Set<string>
   isPending: boolean
   selectedIsbnIds?: Set<string>
   onToggleIsbnSelect?: (book: IsbndbBook) => void
   onOpenLibrarySheet?: (book: IsbndbBook) => void
-  onOpenCollectionSheet?: (book: IsbndbBook) => void
   onCreateManual?: () => void
 }) {
   const { t } = useTranslation()
@@ -761,7 +709,7 @@ function TabBooks({ q, addedIds, isPending, selectedIsbnIds, onToggleIsbnSelect,
           yearFrom={yearFrom} setYearFrom={setYearFrom}
           yearTo={yearTo} setYearTo={setYearTo}
           publisherFilter={publisherFilter} setPublisherFilter={setPublisherFilter}
-          publisherChips={publisherChips} togglePublisherChip={(p) => setPublisherChips((prev) => { const n = new Set(prev); n.has(p) ? n.delete(p) : n.add(p); return n })}
+          publisherChips={publisherChips} togglePublisherChip={(p) => setPublisherChips((prev) => { const n = new Set(prev); if (n.has(p)) { n.delete(p) } else { n.add(p) }; return n })}
           comicsOnly={comicsOnly} setComicsOnly={setComicsOnly}
           activeFilterCount={activeFilterCount} clearFilters={clearFilters}
           publishers={publishers}
@@ -774,7 +722,6 @@ function TabBooks({ q, addedIds, isPending, selectedIsbnIds, onToggleIsbnSelect,
         total={total} page={page} totalPages={totalPages} onPage={setPage}
         selectedIsbnIds={selectedIsbnIds} onToggleIsbnSelect={onToggleIsbnSelect}
         onOpenLibrarySheet={onOpenLibrarySheet}
-        onOpenCollectionSheet={onOpenCollectionSheet}
         onNavigateToDetail={(isbn) => navigate(`/search/book/${isbn}`)}
       />
 
@@ -792,12 +739,11 @@ function TabBooks({ q, addedIds, isPending, selectedIsbnIds, onToggleIsbnSelect,
 
 // ─── Tab: ISBN ────────────────────────────────────────────────────────────────
 
-function TabIsbn({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollectionSheet, onCreateManual }: {
+function TabIsbn({ q, addedIds, isPending, onOpenLibrarySheet, onCreateManual }: {
   q: string
   addedIds: Set<string>
   isPending: boolean
   onOpenLibrarySheet?: (b: IsbndbBook) => void
-  onOpenCollectionSheet?: (b: IsbndbBook) => void
   onCreateManual?: () => void
 }) {
   const { t } = useTranslation()
@@ -850,7 +796,7 @@ function TabIsbn({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollectionS
             <BookCard
               book={bookQuery.data} addedIds={addedIds} isPending={isPending}
               onOpenLibrarySheet={onOpenLibrarySheet}
-              onOpenCollectionSheet={onOpenCollectionSheet}
+
               onNavigateToDetail={(isbn) => navigate(`/search/book/${isbn}`)}
             />
           </div>
@@ -862,7 +808,7 @@ function TabIsbn({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollectionS
               books={editionsQuery.data?.books ?? []} addedIds={addedIds} isPending={isPending}
               isLoading={editionsQuery.isLoading}
               onOpenLibrarySheet={onOpenLibrarySheet}
-              onOpenCollectionSheet={onOpenCollectionSheet}
+
             />
           )}
         </div>
@@ -873,12 +819,11 @@ function TabIsbn({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollectionS
 
 // ─── Tab: Autores ─────────────────────────────────────────────────────────────
 
-function TabAuthors({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollectionSheet }: {
+function TabAuthors({ q, addedIds, isPending, onOpenLibrarySheet }: {
   q: string
   addedIds: Set<string>
   isPending: boolean
   onOpenLibrarySheet?: (b: IsbndbBook) => void
-  onOpenCollectionSheet?: (b: IsbndbBook) => void
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -921,7 +866,6 @@ function TabAuthors({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollecti
           books={authorBooksQuery.data?.books ?? []} addedIds={addedIds} isPending={isPending}
           isLoading={authorBooksQuery.isLoading}
           onOpenLibrarySheet={onOpenLibrarySheet}
-          onOpenCollectionSheet={onOpenCollectionSheet}
           onNavigateToDetail={(isbn) => navigate(`/search/book/${isbn}`)}
           page={page} totalPages={Math.ceil((authorBooksQuery.data?.total ?? 0) / 20)} onPage={setPage}
           total={authorBooksQuery.data?.total}
@@ -947,12 +891,11 @@ function TabAuthors({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollecti
 
 // ─── Tab: Editoriales ─────────────────────────────────────────────────────────
 
-function TabPublishers({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollectionSheet }: {
+function TabPublishers({ q, addedIds, isPending, onOpenLibrarySheet }: {
   q: string
   addedIds: Set<string>
   isPending: boolean
   onOpenLibrarySheet?: (b: IsbndbBook) => void
-  onOpenCollectionSheet?: (b: IsbndbBook) => void
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -993,7 +936,6 @@ function TabPublishers({ q, addedIds, isPending, onOpenLibrarySheet, onOpenColle
           books={pubBooksQuery.data?.books ?? []} addedIds={addedIds} isPending={isPending}
           isLoading={pubBooksQuery.isLoading}
           onOpenLibrarySheet={onOpenLibrarySheet}
-          onOpenCollectionSheet={onOpenCollectionSheet}
           onNavigateToDetail={(isbn) => navigate(`/search/book/${isbn}`)}
           page={page} totalPages={Math.ceil((pubBooksQuery.data?.total ?? 0) / 20)} onPage={setPage}
           total={pubBooksQuery.data?.total}
@@ -1019,12 +961,11 @@ function TabPublishers({ q, addedIds, isPending, onOpenLibrarySheet, onOpenColle
 
 // ─── Tab: Temas ───────────────────────────────────────────────────────────────
 
-function TabSubjects({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollectionSheet }: {
+function TabSubjects({ q, addedIds, isPending, onOpenLibrarySheet }: {
   q: string
   addedIds: Set<string>
   isPending: boolean
   onOpenLibrarySheet?: (b: IsbndbBook) => void
-  onOpenCollectionSheet?: (b: IsbndbBook) => void
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -1065,7 +1006,6 @@ function TabSubjects({ q, addedIds, isPending, onOpenLibrarySheet, onOpenCollect
           books={subjectBooksQuery.data?.books ?? []} addedIds={addedIds} isPending={isPending}
           isLoading={subjectBooksQuery.isLoading}
           onOpenLibrarySheet={onOpenLibrarySheet}
-          onOpenCollectionSheet={onOpenCollectionSheet}
           onNavigateToDetail={(isbn) => navigate(`/search/book/${isbn}`)}
           page={page} totalPages={Math.ceil((subjectBooksQuery.data?.total ?? 0) / 20)} onPage={setPage}
           total={subjectBooksQuery.data?.total}
@@ -1104,46 +1044,15 @@ const TABS: { id: TabId; labelKey: string; placeholderKey: string; Icon: React.E
 export function SearchPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const initialQ = searchParams.get('q') ?? ''
   const [activeTab, setActiveTab] = useState<TabId>('books')
-  const [globalInput, setGlobalInput] = useState('')
-  const [globalSubmitted, setGlobalSubmitted] = useState('')
+  const [globalInput, setGlobalInput] = useState(initialQ)
+  const [globalSubmitted, setGlobalSubmitted] = useState(initialQ)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   const [createManualOpen, setCreateManualOpen] = useState(false)
 
-  // Sheet states
   const [librarySheetBook, setLibrarySheetBook] = useState<IsbndbBook | null>(null)
-  const [collectionSheetBook, setCollectionSheetBook] = useState<IsbndbBook | null>(null)
-
-  // Multi-select
-  const [isSelectingIsbn, setIsSelectingIsbn] = useState(false)
-  const [selectedIsbnBooks, setSelectedIsbnBooks] = useState<Map<string, IsbndbBook>>(new Map())
-  const [addToCollectionIsbnOpen, setAddToCollectionIsbnOpen] = useState(false)
-
-  function toggleIsbnSelect(book: IsbndbBook) {
-    const isbn = getIsbn(book)
-    setSelectedIsbnBooks((prev) => {
-      const n = new Map(prev); n.has(isbn) ? n.delete(isbn) : n.set(isbn, book); return n
-    })
-  }
-  function exitIsbnSelecting() { setIsSelectingIsbn(false); setSelectedIsbnBooks(new Map()) }
-
-  async function handleAddIsbnToCollection(collectionId: string) {
-    const comicIds: string[] = []
-    for (const [, book] of selectedIsbnBooks) {
-      try {
-        const { comic } = await isbndbApi.import(book)
-        try { await libraryApi.add({ comicId: comic.id, collectionStatus: 'IN_COLLECTION' }) }
-        catch (err: unknown) { if ((err as { response?: { status?: number } })?.response?.status !== 409) throw err }
-        comicIds.push(comic.id)
-        setAddedIds((prev) => new Set(prev).add(getIsbn(book)))
-      } catch { /* continue */ }
-    }
-    await Promise.all(comicIds.map((id) => collectionsApi.addComic(collectionId, id).catch(() => {})))
-    queryClient.invalidateQueries({ queryKey: ['library'] })
-    queryClient.invalidateQueries({ queryKey: ['collections'] })
-    toast.success(t('collections.addMultipleSuccess', { count: comicIds.length }))
-    exitIsbnSelecting()
-  }
 
   // ISBNdb import (quick add)
   const importMutation = useMutation({
@@ -1173,7 +1082,6 @@ export function SearchPage() {
     addedIds,
     isPending: importMutation.isPending,
     onOpenLibrarySheet: (b: IsbndbBook) => setLibrarySheetBook(b),
-    onOpenCollectionSheet: (b: IsbndbBook) => setCollectionSheetBook(b),
     onCreateManual: () => setCreateManualOpen(true),
   }
 
@@ -1193,17 +1101,6 @@ export function SearchPage() {
               <PenLine className="size-4" />
               {t('search.createManual.trigger')}
             </Button>
-            {activeTab === 'books' && (
-              <Button
-                variant={isSelectingIsbn ? 'secondary' : 'outline'}
-                size="sm"
-                className="h-9 gap-1.5"
-                onClick={() => { if (isSelectingIsbn) exitIsbnSelecting(); else setIsSelectingIsbn(true) }}
-              >
-                <CheckSquare className="size-4" />
-                {isSelectingIsbn ? t('common.cancel') : t('library.selectMode')}
-              </Button>
-            )}
           </div>
         }
       />
@@ -1255,57 +1152,18 @@ export function SearchPage() {
 
       {/* Tab content */}
       <div>
-        {activeTab === 'books' && (
-          <TabBooks
-            key={globalSubmitted}
-            {...tabProps}
-            selectedIsbnIds={isSelectingIsbn ? new Set(selectedIsbnBooks.keys()) : undefined}
-            onToggleIsbnSelect={isSelectingIsbn ? toggleIsbnSelect : undefined}
-          />
-        )}
+        {activeTab === 'books' && <TabBooks key={globalSubmitted} {...tabProps} />}
         {activeTab === 'isbn'       && <TabIsbn       key={globalSubmitted} {...tabProps} />}
         {activeTab === 'authors'    && <TabAuthors    key={globalSubmitted} {...tabProps} />}
         {activeTab === 'publishers' && <TabPublishers key={globalSubmitted} {...tabProps} />}
         {activeTab === 'subjects'   && <TabSubjects   key={globalSubmitted} {...tabProps} />}
       </div>
 
-      {/* Multi-select action bar */}
-      {isSelectingIsbn && selectedIsbnBooks.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-background border shadow-xl">
-          <span className="text-sm font-medium">{t('library.selectedCount', { count: selectedIsbnBooks.size })}</span>
-          <Button size="sm" className="gap-1.5" onClick={() => setAddToCollectionIsbnOpen(true)}>
-            <Folders className="size-3.5" />{t('library.addToCollection')}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={exitIsbnSelecting}>{t('common.cancel')}</Button>
-        </div>
-      )}
-
-      {/* Sheets and dialogs */}
-      <AddToCollectionDialog
-        open={addToCollectionIsbnOpen}
-        onClose={() => setAddToCollectionIsbnOpen(false)}
-        count={selectedIsbnBooks.size}
-        onConfirm={handleAddIsbnToCollection}
-      />
-
-      {/* Library sheet */}
       {librarySheetBook && (
         <AddToSheet
           book={librarySheetBook}
           open={!!librarySheetBook}
           onClose={() => setLibrarySheetBook(null)}
-          mode="library"
-          noNavigate
-        />
-      )}
-
-      {/* Collection sheet (collection + series picker embedded) */}
-      {collectionSheetBook && (
-        <AddToSheet
-          book={collectionSheetBook}
-          open={!!collectionSheetBook}
-          onClose={() => setCollectionSheetBook(null)}
-          mode="collection"
           noNavigate
         />
       )}

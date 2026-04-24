@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ArrowLeft, BookOpen, Layers, Pencil, Plus, Search } from 'lucide-react'
+import { ArrowLeft, BookOpen, Layers, Loader2, Pencil, Plus, Search } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { libraryApi } from '@/api/library'
 import { collectionSeriesApi } from '@/api/collection-series'
+import { comicsApi } from '@/api/comics'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -29,18 +30,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { UserComic } from '@/types'
 
 // ─── Missing Issue Card ───────────────────────────────────────────────────────
 
-function MissingIssueCard({ issueNumber }: { issueNumber: number }) {
+function MissingIssueCard({ issueNumber, searchQuery }: { issueNumber: number; searchQuery?: string }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
 
   return (
-    <div className="h-full  flex flex-col rounded-lg border-2 border-dashed border-border/90 overflow-hidden bg-muted/60 opacity-70 hover:opacity-80 transition-opacity cursor-pointer group">
+    <div className="h-full flex flex-col rounded-lg border-2 border-dashed border-border/90 overflow-hidden bg-muted/60 opacity-70 hover:opacity-80 transition-opacity cursor-pointer group">
       <div className="aspect-[2/3] flex flex-col items-center justify-center gap-3 p-4">
         <Plus className="size-7 text-muted-foreground/40 group-hover:text-primary transition-colors" />
         <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center font-mono">
@@ -52,7 +59,9 @@ function MissingIssueCard({ issueNumber }: { issueNumber: number }) {
           {t('seriesDetail.missing')}
         </p>
         <button
-          onClick={() => navigate('/search')}
+          onClick={() =>
+            navigate(searchQuery ? `/search?q=${encodeURIComponent(searchQuery)}` : '/search')
+          }
           className="text-[10px] text-primary hover:underline text-left font-medium"
         >
           {t('seriesDetail.search')} →
@@ -66,8 +75,8 @@ function MissingIssueCard({ issueNumber }: { issueNumber: number }) {
 
 function IssueCard({ entry }: { entry: UserComic }) {
   const { comic } = entry
-  
-  const isInCollection = entry.collectionStatus === 'IN_COLLECTION'
+  const { t } = useTranslation()
+
 
   return (
     <Link
@@ -87,25 +96,25 @@ function IssueCard({ entry }: { entry: UserComic }) {
             <BookOpen className="size-8 text-muted-foreground/30" />
           </div>
         )}
-
-        <div
-          className={`absolute top-2 right-2 px-2 py-0.5 text-[10px] font-black rounded-sm ${
-            isInCollection
+        {entry.collectionStatus && (
+          <span className={`absolute top-2 right-2 text-[9px] font-black px-1.5 h-4 flex items-center rounded-sm uppercase tracking-wide ${
+            entry.collectionStatus === 'IN_COLLECTION'
               ? 'bg-primary text-primary-foreground'
+              : entry.collectionStatus === 'WISHLIST'
+              ? 'bg-sky-500/80 text-white'
               : 'bg-muted/80 backdrop-blur-sm text-muted-foreground'
-          }`}
-        >
-          {isInCollection ? 'IN LIBRARY' : (entry.collectionStatus ?? 'IN LIBRARY')}
-        </div>
-
+          }`}>
+            {t(`status.${entry.collectionStatus}` as `status.IN_COLLECTION`)}
+          </span>
+        )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
       </div>
 
       <div className="h-full p-3 flex flex-col gap-1">
-        <p className="text-sm font-bold leading-tight line-clamp-1">{comic.title}</p>
+        <p className="text-sm font-bold leading-tight line-clamp-2 h-9 ">{comic.title}</p>
         {(comic.issueNumber || entry.seriesPosition != null) && (
           <p className="text-[14px] text-muted-foreground font-mono tracking-wider">
-           Vol. #{comic.issueNumber ?? entry.seriesPosition}
+            Vol. #{comic.issueNumber ?? entry.seriesPosition}
           </p>
         )}
       </div>
@@ -129,7 +138,6 @@ function SortableIssueCard({ entry }: { entry: UserComic }) {
       {...attributes}
       {...listeners}
     >
-      {/* Inner div tracks press position and blocks click-navigation after a drag */}
       <div
         onPointerDown={(e) => {
           startX.current = e.clientX
@@ -147,7 +155,7 @@ function SortableIssueCard({ entry }: { entry: UserComic }) {
   )
 }
 
-function SortableMissingCard({ issueNumber }: { issueNumber: number }) {
+function SortableMissingCard({ issueNumber, searchQuery }: { issueNumber: number; searchQuery?: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `missing-${issueNumber}` })
 
@@ -158,8 +166,99 @@ function SortableMissingCard({ issueNumber }: { issueNumber: number }) {
       {...attributes}
       {...listeners}
     >
-      <MissingIssueCard issueNumber={issueNumber} />
+      <MissingIssueCard issueNumber={issueNumber} searchQuery={searchQuery} />
     </div>
+  )
+}
+
+// ─── Add from Library Sheet ───────────────────────────────────────────────────
+
+function AddFromLibrarySheet({ open, onClose, collectionSeriesId, existingComicIds }: {
+  open: boolean
+  onClose: () => void
+  collectionSeriesId: string
+  existingComicIds: Set<string>
+}) {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const [search, setSearch] = useState('')
+
+  const { data: libraryPage } = useQuery({
+    queryKey: ['library-all'],
+    queryFn: () => libraryApi.getAll({ limit: 500 }),
+    enabled: open,
+  })
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return (libraryPage?.data ?? []).filter(
+      (uc) => !existingComicIds.has(uc.comic.id) && uc.comic.title.toLowerCase().includes(q),
+    )
+  }, [libraryPage, existingComicIds, search])
+
+  const assignMutation = useMutation({
+    mutationFn: (comicId: string) => comicsApi.update(comicId, { collectionSeriesId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['series-detail', collectionSeriesId] }),
+    onError: () => toast.error(t('common.error')),
+  })
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+        <SheetHeader className="px-6 py-4 border-b">
+          <SheetTitle>{t('seriesDetail.addFromLibrary')}</SheetTitle>
+        </SheetHeader>
+        <div className="px-4 py-3 border-b">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              className="w-full pl-9 pr-3 py-2 text-sm bg-muted rounded-md outline-none focus:ring-1 focus:ring-primary"
+              placeholder={t('collections.searchLibrary')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto divide-y divide-border/50">
+          {filtered.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-12">
+              {t('seriesDetail.noLibraryComics')}
+            </p>
+          ) : (
+            filtered.map((uc) => (
+              <div key={uc.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="size-10 rounded overflow-hidden bg-muted shrink-0">
+                  {uc.comic.coverUrl ? (
+                    <img src={uc.comic.coverUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <BookOpen className="size-4 text-muted-foreground/40" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium line-clamp-1">{uc.comic.title}</p>
+                  <p className="text-xs text-muted-foreground">{uc.comic.publisher} · {uc.comic.year}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  disabled={assignMutation.isPending}
+                  onClick={() => assignMutation.mutate(uc.comic.id)}
+                >
+                  {assignMutation.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="size-3.5" />
+                  )}
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -243,7 +342,11 @@ function EditSeriesDialog({
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={mutation.isPending || !name.trim()}>
-              {mutation.isPending ? t('common.saving') : t('common.save')}
+              {mutation.isPending ? (
+                <><Loader2 className="size-3.5 animate-spin mr-1" />{t('common.saving')}</>
+              ) : (
+                t('common.save')
+              )}
             </Button>
           </div>
         </form>
@@ -260,6 +363,7 @@ export function SeriesDetailPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [editOpen, setEditOpen] = useState(false)
+  const [addFromLibraryOpen, setAddFromLibraryOpen] = useState(false)
   const [localOrder, setLocalOrder] = useState<string[] | null>(null)
 
   const sensors = useSensors(
@@ -314,8 +418,7 @@ export function SeriesDetailPage() {
       return { grid: slots, isDragMode: false }
     }
 
-    // Free mode — reconstruct from localOrder (mixed comic IDs + "missing-N" strings)
-    // or fall back to server order (seriesPosition)
+    // Free mode — reconstruct from localOrder or fall back to server order
     const allComics = [
       ...Array.from(byIssueNumber.entries())
         .sort(([a], [b]) => a - b)
@@ -336,7 +439,6 @@ export function SeriesDetailPage() {
           if (uc) slots.push({ type: 'owned', entry: uc })
         }
       }
-      // append any comics added after the last drag
       const inOrder = new Set(localOrder)
       for (const uc of allComics) {
         if (!inOrder.has(uc.comic.id)) slots.push({ type: 'owned', entry: uc })
@@ -345,7 +447,6 @@ export function SeriesDetailPage() {
       const hasPositions = allComics.some((uc) => uc.seriesPosition != null)
 
       if (data.totalVolumes != null && data.totalVolumes > 0 && hasPositions) {
-        // Position-based: each comic sits at its exact seriesPosition slot, gaps are missing
         const posMap = new Map<number, UserComic>()
         const unpositioned: UserComic[] = []
         for (const uc of allComics) {
@@ -363,7 +464,6 @@ export function SeriesDetailPage() {
         }
         for (const uc of unpositioned) slots.push({ type: 'owned', entry: uc })
       } else {
-        // No positions yet: show owned comics first, pad missing at end if totalVolumes set
         slots = allComics.map((uc) => ({ type: 'owned' as const, entry: uc }))
         if (data.totalVolumes != null && data.totalVolumes > 0) {
           for (let i = allComics.length + 1; i <= data.totalVolumes; i++) {
@@ -375,7 +475,6 @@ export function SeriesDetailPage() {
 
     return { grid: slots, isDragMode: true }
   }, [data, localOrder])
-  
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -385,7 +484,18 @@ export function SeriesDetailPage() {
     )
     const oldIndex = current.indexOf(String(active.id))
     const newIndex = current.indexOf(String(over.id))
-    const newOrder = arrayMove(current, oldIndex, newIndex)
+    const reordered = arrayMove(current, oldIndex, newIndex)
+
+    // Renumber missing slots sequentially after each reorder
+    let missingCounter = 0
+    const newOrder = reordered.map((slotId) => {
+      if (slotId.startsWith('missing-')) {
+        missingCounter++
+        return `missing-${missingCounter}`
+      }
+      return slotId
+    })
+
     setLocalOrder(newOrder)
     const ownedPositions = newOrder.reduce<{ comicId: string; position: number }[]>(
       (acc, slotId, i) => {
@@ -396,6 +506,11 @@ export function SeriesDetailPage() {
     )
     reorderMutation.mutate(ownedPositions)
   }
+
+  const existingComicIds = useMemo(
+    () => new Set((data?.comics ?? []).map((uc) => uc.comic.id)),
+    [data],
+  )
 
   const progress =
     data?.totalVolumes && data.totalVolumes > 0
@@ -455,7 +570,7 @@ export function SeriesDetailPage() {
         <div className="relative z-10 h-full flex flex-col justify-end px-8 pb-8 max-w-7xl">
           {/* Breadcrumb */}
           <button
-            onClick={() => navigate('/library')}
+            onClick={() => navigate('/library/series')}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-5 w-fit"
           >
             <ArrowLeft className="size-3.5" />
@@ -518,9 +633,22 @@ export function SeriesDetailPage() {
                 <Pencil className="size-3.5" />
                 {t('library.editSeries')}
               </Button>
-              <Button size="sm" className="gap-2" onClick={() => navigate('/search')}>
-                <Plus className="size-3.5" />
-                {t('seriesDetail.addIssue')}
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setAddFromLibraryOpen(true)}
+              >
+                <BookOpen className="size-3.5" />
+                {t('seriesDetail.addFromLibrary')}
+              </Button>
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={() => navigate(`/search?q=${encodeURIComponent(data.seriesName)}`)}
+              >
+                <Search className="size-3.5" />
+                {t('seriesDetail.addIssueSearch')}
               </Button>
             </div>
           </div>
@@ -530,8 +658,11 @@ export function SeriesDetailPage() {
       {/* ── Issue Manifest ─────────────────────────────────────────────────── */}
       <div className="px-8 py-8 max-w-7xl">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-base font-semibold tracking-tight">
+          <h2 className="text-base font-semibold tracking-tight flex items-center gap-2">
             {t('seriesDetail.manifest')}
+            {reorderMutation.isPending && (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            )}
           </h2>
           {data.totalVolumes == null && data.comicCount > 0 && (
             <button
@@ -547,7 +678,7 @@ export function SeriesDetailPage() {
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Search className="size-10 text-muted-foreground/30" />
             <p className="text-muted-foreground text-sm">{t('seriesDetail.empty')}</p>
-            <Button size="sm" onClick={() => navigate('/search')}>
+            <Button size="sm" onClick={() => navigate(`/search?q=${encodeURIComponent(data.seriesName)}`)}>
               {t('seriesDetail.addIssue')}
             </Button>
           </div>
@@ -566,7 +697,11 @@ export function SeriesDetailPage() {
                   slot.type === 'owned' ? (
                     <SortableIssueCard key={slot.entry.comic.id} entry={slot.entry} />
                   ) : (
-                    <SortableMissingCard key={`missing-${slot.n}`} issueNumber={slot.n} />
+                    <SortableMissingCard
+                      key={`missing-${slot.n}`}
+                      issueNumber={slot.n}
+                      searchQuery={`${data.collectionName} ${slot.n}`}
+                    />
                   ),
                 )}
               </div>
@@ -578,7 +713,11 @@ export function SeriesDetailPage() {
               slot.type === 'owned' ? (
                 <IssueCard key={slot.entry.comic.id} entry={slot.entry} />
               ) : (
-                <MissingIssueCard key={`missing-${slot.n}`} issueNumber={slot.n} />
+                <MissingIssueCard
+                  key={`missing-${slot.n}`}
+                  issueNumber={slot.n}
+                  searchQuery={`${data.seriesName} ${slot.n}`}
+                />
               ),
             )}
           </div>
@@ -596,6 +735,14 @@ export function SeriesDetailPage() {
           initialTotalVolumes={data.totalVolumes}
         />
       )}
+
+      {/* ── Add from Library Sheet ──────────────────────────────────────────── */}
+      <AddFromLibrarySheet
+        open={addFromLibraryOpen}
+        onClose={() => setAddFromLibraryOpen(false)}
+        collectionSeriesId={data.collectionSeriesId}
+        existingComicIds={existingComicIds}
+      />
     </>
   )
 }

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   Check, Plus, Search, X, Star, BookMarked, BookOpen,
-  Bookmark, Heart, HandHelping, Pencil, ChevronDown, ChevronRight, Eye,
+  Bookmark, HandHelping, Pencil, ChevronDown, ChevronRight, Eye,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { comicsApi } from '@/api/comics'
@@ -46,13 +46,13 @@ function getYear(book: IsbndbBook) {
   return isNaN(y) ? undefined : y
 }
 
-const COLLECTION_STATUS_OPTIONS: { key: CollectionStatusKey; labelKey: string; Icon: React.ElementType }[] = [
+const COLLECTION_STATUS_OPTIONS: { key: CollectionStatusKey; labelKey: `status.${CollectionStatusKey}`; Icon: React.ElementType }[] = [
   { key: 'IN_COLLECTION', labelKey: 'status.IN_COLLECTION', Icon: BookMarked  },
   { key: 'WISHLIST',      labelKey: 'status.WISHLIST',      Icon: Bookmark    },
   { key: 'LOANED',        labelKey: 'status.LOANED',        Icon: HandHelping },
 ]
 
-const READ_STATUS_OPTIONS: { key: ReadStatusKey; labelKey: string; Icon: React.ElementType }[] = [
+const READ_STATUS_OPTIONS: { key: ReadStatusKey; labelKey: `status.${ReadStatusKey}`; Icon: React.ElementType }[] = [
   { key: 'READ',    labelKey: 'status.READ',    Icon: BookOpen   },
   { key: 'READING', labelKey: 'status.READING', Icon: Eye        },
   { key: 'TO_READ', labelKey: 'status.TO_READ', Icon: BookMarked },
@@ -135,9 +135,8 @@ function AutocompleteInput({
 // ─── Tags Confirmator ─────────────────────────────────────────────────────────
 
 function TagsConfirmator({
-  subjects, activeTags, onChange,
+  activeTags, onChange,
 }: {
-  subjects: string[]
   activeTags: string[]
   onChange: (tags: string[]) => void
 }) {
@@ -268,18 +267,9 @@ export function AddCollectionBottomSheet({ book, open, onClose, defaultTarget }:
 
   const libraryComics = libraryData?.data ?? []
 
-  const scriptwriterSuggestions = useMemo(() =>
-    [...new Set(libraryComics.map((uc) => uc.comic.scriptwriter).filter(Boolean) as string[])],
-    [libraryComics]
-  )
-  const artistSuggestions = useMemo(() =>
-    [...new Set(libraryComics.map((uc) => uc.comic.artist).filter(Boolean) as string[])],
-    [libraryComics]
-  )
-  const publisherSuggestions = useMemo(() =>
-    [...new Set(libraryComics.map((uc) => uc.comic.publisher).filter(Boolean) as string[])],
-    [libraryComics]
-  )
+  const scriptwriterSuggestions = [...new Set(libraryComics.map((uc) => uc.comic.scriptwriter).filter(Boolean) as string[])]
+  const artistSuggestions = [...new Set(libraryComics.map((uc) => uc.comic.artist).filter(Boolean) as string[])]
+  const publisherSuggestions = [...new Set(libraryComics.map((uc) => uc.comic.publisher).filter(Boolean) as string[])]
 
   // Series (CollectionSeries) dentro de la colección destino
   const { data: collectionSeries = [] } = useQuery({
@@ -299,12 +289,12 @@ export function AddCollectionBottomSheet({ book, open, onClose, defaultTarget }:
     : null
 
   // Submit button label
-  const submitLabel = useMemo(() => {
+  const submitLabel = (() => {
     if (defaultTarget === 'library') return t('isbndb.addToLibrary')
     const colName = (defaultTarget as AddCollectionTarget).collectionName
     if (selectedSeriesName) return t('addSheet.addToSeriesInCollection', { series: selectedSeriesName, collection: colName })
     return t('addSheet.addToCollection', { collection: colName })
-  }, [defaultTarget, selectedSeriesName, t])
+  })()
 
   function handleClose() {
     // Reset state
@@ -485,7 +475,7 @@ export function AddCollectionBottomSheet({ book, open, onClose, defaultTarget }:
                   }`}
                 >
                   <Icon className="size-3.5" />
-                  {t(labelKey as `status.${string}`)}
+                  {t(labelKey)}
                 </button>
               ))}
             </div>
@@ -515,7 +505,7 @@ export function AddCollectionBottomSheet({ book, open, onClose, defaultTarget }:
                   }`}
                 >
                   <Icon className="size-3.5" />
-                  {t(labelKey as `status.${string}`)}
+                  {t(labelKey)}
                 </button>
               ))}
             </div>
@@ -525,7 +515,6 @@ export function AddCollectionBottomSheet({ book, open, onClose, defaultTarget }:
 
           {/* ── Tags confirmator ───────────────────────────── */}
           <TagsConfirmator
-            subjects={book.subjects ?? []}
             activeTags={activeTags}
             onChange={setActiveTags}
           />

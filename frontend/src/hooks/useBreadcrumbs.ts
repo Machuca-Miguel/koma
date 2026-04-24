@@ -15,6 +15,7 @@ export function useBreadcrumbs(): BreadcrumbItem[] {
   const qc = useQueryClient()
 
   const home: BreadcrumbItem = { label: t('nav.dashboard'), href: '/dashboard' }
+  const libraryHome: BreadcrumbItem = { label: t('nav.library'), href: '/library' }
 
   const path = location.pathname
 
@@ -26,19 +27,36 @@ export function useBreadcrumbs(): BreadcrumbItem[] {
     return [home, { label: t('nav.library') }]
   }
 
+  if (path === '/library/series') {
+    return [home, libraryHome, { label: t('nav.mySeries') }]
+  }
+
+  if (path === '/library/collections') {
+    return [home, libraryHome, { label: t('nav.myCollections') }]
+  }
+
+  if (path.startsWith('/series/') && params.id) {
+    const series = qc.getQueryData<{ seriesName: string }>(['series-detail', params.id])
+    return [
+      home,
+      { label: t('nav.mySeries'), href: '/library/series' },
+      { label: series?.seriesName ?? '…' },
+    ]
+  }
+
   if (path === '/search') {
     return [home, { label: t('nav.search') }]
   }
 
   if (path === '/collections') {
-    return [home, { label: t('nav.collections') }]
+    return [home, { label: t('nav.myCollections') }]
   }
 
   if (path.startsWith('/collections/') && params.id) {
     const col = qc.getQueryData<Collection>(['collection', params.id])
     return [
       home,
-      { label: t('nav.collections'), href: '/collections' },
+      { label: t('nav.myCollections'), href: '/library/collections' },
       { label: col?.name ?? '…' },
     ]
   }

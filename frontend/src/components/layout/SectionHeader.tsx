@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 interface SectionHeaderProps {
@@ -12,10 +13,13 @@ interface SectionHeaderProps {
 export function SectionHeader({
   title,
   viewAllHref,
-  viewAllLabel = 'View All',
+  viewAllLabel,
   extra,
   className = '',
 }: SectionHeaderProps) {
+  const { t } = useTranslation()
+  const defaultLabel = viewAllLabel || t('common.viewAll')
+
   return (
     <div className={`flex items-center justify-between mb-5 ${className}`}>
       <h2 className="text-xl font-bold tracking-tight">{title}</h2>
@@ -23,7 +27,7 @@ export function SectionHeader({
         {extra}
         {viewAllHref && (
           <Link to={viewAllHref} className="view-all-link">
-            {viewAllLabel}
+            {defaultLabel}
           </Link>
         )}
       </div>

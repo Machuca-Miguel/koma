@@ -19,11 +19,9 @@ export class AiService {
     const userComics = await this.prisma.userComic.findMany({
       where: { userId, collectionStatus: 'IN_COLLECTION' },
       include: {
+        collectionSeries: true,
         comic: {
-          include: {
-            tags: { include: { tag: true } },
-            collectionSeries: true,
-          },
+          include: { tags: { include: { tag: true } } },
         },
       },
       take: 100,
@@ -37,8 +35,9 @@ export class AiService {
     const tagSet = new Set<string>();
     const drawingStyleSet = new Set<string>();
 
-    for (const { comic } of userComics) {
-      if (comic.collectionSeries?.name) seriesSet.add(comic.collectionSeries.name);
+    for (const uc of userComics) {
+      const comic = uc.comic;
+      if (uc.collectionSeries?.name) seriesSet.add(uc.collectionSeries.name);
       else seriesSet.add(comic.title);
       if (comic.publisher) publisherSet.add(comic.publisher);
       if (comic.drawingStyle) drawingStyleSet.add(comic.drawingStyle);

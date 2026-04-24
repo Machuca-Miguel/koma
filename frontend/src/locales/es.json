@@ -13,11 +13,19 @@
     "added": "Añadido",
     "adding": "Añadiendo...",
     "saving": "Guardando...",
+    "next": "Siguiente",
     "noResults": "Sin resultados",
     "pages": "{{count}} páginas",
     "select": "Seleccionar",
     "deselect": "Deseleccionar",
-    "optional": "Opcional"
+    "optional": "Opcional",
+    "edit": "Editar",
+    "deleting": "Eliminando...",
+    "viewmode": {
+      "grid": "Cuadricula",
+      "list": "Lista"
+    },
+    "viewAll": "Ver todos"
   },
   "status": {
     "IN_COLLECTION": "En colección",
@@ -37,13 +45,17 @@
     "BOLSILLO": "Bolsillo",
     "OMNIBUS": "Ómnibus",
     "HARDCOVER": "Tapa dura",
-    "DIGITAL": "Digital"
+    "SOFTCOVER": "Tapa blanda",
+    "DIGITAL": "Digital",
+    "OTHER": "Otro"
   },
   "nav": {
     "dashboard": "Inicio",
     "library": "Mi Biblioteca",
+    "myCollections": "Colecciones",
+    "mySeries": "Series",
+    "comics": "Cómics",
     "search": "Buscar",
-    "collections": "Colecciones",
     "settings": "Ajustes",
     "discover": "Descubrir",
     "logout": "Cerrar sesión",
@@ -103,7 +115,28 @@
     "rated_other": "{{count}} valorados",
     "quickLinks": "Accesos rápidos",
     "goToLibrary": "Mi Biblioteca",
-    "searchComics": "Buscar cómics"
+    "searchComics": "Buscar cómics",
+    "title": "Dashboard",
+    "subtitle": "Resumen de tu archivo digital.",
+    "addComic": "Añadir cómic",
+    "statTotalVolume": "Total volúmenes",
+    "statActiveSeries": "Series activas",
+    "statCompleted": "Completados",
+    "statWishlist": "Lista de deseos",
+    "statValueComics": "{{count}} cómics",
+    "statValueSeries": "{{count}} series",
+    "statValueRead": "{{count}} leídos",
+    "statValueItems": "{{count}} pendientes",
+    "recentlyAdded": "Añadidos recientemente",
+    "noComicsYet": "Aún no hay cómics.",
+    "searchAndAdd": "¡Busca y añade algunos!",
+    "readingProgress": "Progreso de lectura",
+    "readingProgressDesc": "Estado de curación activa de tu colección.",
+    "completion": "Completado",
+    "ownedLabel": "Tengo",
+    "readLabel": "Leídos",
+    "wishlistSection": "Lista de deseos",
+    "wishlistItemCount": "{{count}} pendientes"
   },
   "library": {
     "title": "Mi Biblioteca",
@@ -153,7 +186,6 @@
     "noResultsSearch": "Sin resultados para \"{{q}}\"",
     "clearSearch": "Limpiar",
     "filterByTag": "Etiqueta",
-    "noSeries": "Sin serie",
     "seriesCount": "{{count}} núm.",
     "seriesComicsCount": "{{count}} cómics en tu biblioteca",
     "checkCompletion": "Ver completitud",
@@ -175,6 +207,8 @@
     "viewGrid": "Vista cuadrícula",
     "viewSeries": "Vista por series",
     "noSeries": "No hay series en tu biblioteca",
+    "filterComplete": "Completas",
+    "filterIncomplete": "Incompletas",
     "issues": "números",
     "ongoing": "En curso",
     "complete": "Completa",
@@ -189,7 +223,11 @@
     "seriesCreated": "«{{name}}» creada",
     "selectCollection": "Selecciona una colección…",
     "createCollection": "Crear colección",
-    "seriesCollectionCreated": "Colección «{{name}}» creada"
+    "seriesCollectionCreated": "Colección «{{name}}» creada",
+    "footerTotalLabel": "Total números",
+    "footerReadStatusLabel": "Lectura",
+    "footerComplete": "{{percent}}% completado",
+    "footerPage": "Página {{page}} de {{total}}"
   },
   "search": {
     "title": "Buscar cómics",
@@ -253,17 +291,21 @@
       "emptyStateCta": "¿No encuentras lo que buscas?",
       "collection": "Añadir a colección (opcional)",
       "collectionSearch": "Buscar colecciones...",
+      "series": "Serie (opcional)",
+      "newSeries": "Nueva serie",
+      "seriesPosition": "Posición en la serie",
       "fields": {
         "title": "Título *",
-        "series": "Serie",
-        "issueNumber": "Número",
         "publisher": "Editorial",
         "year": "Año",
         "isbn": "ISBN",
         "binding": "Encuadernación",
         "coverUrl": "URL de portada",
         "drawingStyle": "Estilo de dibujo",
-        "synopsis": "Sinopsis"
+        "synopsis": "Sinopsis",
+        "authors": "Autores",
+        "scriptwriter": "Guionista",
+        "artist": "Dibujante"
       }
     }
   },
@@ -284,6 +326,8 @@
     "descPlaceholder": "Una breve descripción...",
     "totalVolumesLabel": "Total de volúmenes",
     "totalVolumesPlaceholder": "Ej. 12",
+    "initialSeriesLabel": "Primera serie",
+    "initialSeriesPlaceholder": "Ej. Principal, Arco 1…",
     "public": "Pública",
     "publicHint": "Cualquiera puede verla",
     "private": "Privada",
@@ -302,6 +346,11 @@
     "allComicsAdded": "Todos los cómics ya están en esta colección",
     "showComics": "Ver cómics",
     "hideComics": "Ocultar",
+    "seriesLabel": "Series",
+    "seriesProgressComplete": "completado",
+    "issuesLabel": "Números",
+    "allSeries": "Todas las series",
+    "unsorted": "Sin clasificar",
     "comicCount_one": "{{count}} cómic",
     "comicCount_other": "{{count}} cómics",
     "addComic": "Añadir cómic",
@@ -347,6 +396,11 @@
     "noOtherCollections": "No hay otras colecciones",
     "newCollectionName": "Nombre de la nueva colección...",
     "confirmAdd": "Añadir {{count}}",
+    "pickSeriesTitle": "Seleccionar serie",
+    "principalSeries": "Principal (por defecto)",
+    "default": "Por defecto",
+    "createSeriesTitle": "Nueva serie",
+    "seriesNamePlaceholder": "Nombre de la serie...",
     "addMultipleSuccess": "{{count}} cómics añadidos",
     "export": "Exportar",
     "badge_IN_COLLECTION": "En colección",
@@ -358,7 +412,19 @@
     "updateStatusError": "No se pudo actualizar el estado",
     "positionHint": "Click para cambiar posición",
     "addToCollectionTitle": "Añadir {{count}} a una colección",
-    "filterPlaceholder": "Filtrar colecciones..."
+    "filterPlaceholder": "Filtrar colecciones...",
+    "ratingLabel": "Valoración",
+    "yearRange": "Años",
+    "removeComic": "Quitar",
+    "addComics": "Añadir cómics",
+    "searchLibrary": "Buscar en tu biblioteca...",
+    "searchComics": "Buscar en la colección...",
+    "emptyComicsHint": "Añade cómics desde tu biblioteca para empezar.",
+    "deleteTitle": "Eliminar colección",
+    "deleteConfirm": "Esta acción no se puede deshacer. Se eliminarán todas las asociaciones.",
+    "configureSeriesTitle": "Configurar serie",
+    "seriesNameLabel": "Nombre de la serie",
+    "seriesNameHint": "Puedes renombrarlo o mantener el nombre por defecto."
   },
   "comicDetail": {
     "back": "Volver",
@@ -408,14 +474,6 @@
     "character": "Personaje",
     "genre": "Género",
     "characters": "Personajes",
-    "status": {
-      "OWNED": "Tengo",
-      "READ": "Leído",
-      "WISHLIST": "Lo quiero",
-      "FAVORITE": "Favorito",
-      "LOANED": "Prestado"
-    },
-    "loanedToPlaceholder": "Prestado a...",
     "tagsLabel": "Etiquetas",
     "addTag": "Añadir etiqueta...",
     "editComic": "Editar cómic",
@@ -651,7 +709,9 @@
     "newCollectionPlaceholder": "Nombre de la colección...",
     "saveToCollection": "Guardar en colección",
     "savedToCollection": "Guardado en colección",
-    "principalHint": "Este número se vinculará a la serie principal por defecto."
+    "principalHint": "Este número se vinculará a la serie principal por defecto.",
+    "volumeNumber": "N.º de volumen",
+    "volumeNumberPlaceholder": "ej. 1"
   },
   "discover": {
     "title": "Descubrir",
@@ -670,6 +730,7 @@
   },
   "seriesDetail": {
     "backToLibrary": "Volver a la Biblioteca",
+    "viewAll": "Ver todo",
     "vaultProgress": "Progreso de la colección",
     "of": "de",
     "addIssue": "Añadir número",
@@ -678,6 +739,10 @@
     "search": "Buscar",
     "noTotalHint": "Define el total para detectar huecos",
     "empty": "No hay números en esta serie todavía",
-    "notFound": "Serie no encontrada"
+    "notFound": "Serie no encontrada",
+    "addFromLibrary": "Desde biblioteca",
+    "addIssueSearch": "Buscar número nuevo",
+    "noLibraryComics": "Sin cómics sin asignar en tu biblioteca",
+    "assign": "Asignar a la serie"
   }
 }

@@ -11,8 +11,8 @@ export const collectionsApi = {
   getOne: (id: string) =>
     api.get<Collection>(`/collections/${id}`).then((r) => r.data),
 
-  create: (data: { name: string; description?: string; isPublic?: boolean; rating?: number }) =>
-    api.post<Collection>('/collections', data).then((r) => r.data),
+  create: (data: { name: string; description?: string; isPublic?: boolean; rating?: number; initialSeriesName?: string }) =>
+    api.post<{ collection: Collection; series: { id: string; name: string; isDefault: boolean } }>('/collections', data).then((r) => r.data),
 
   update: (id: string, data: { name?: string; description?: string; isPublic?: boolean; rating?: number }) =>
     api.patch<Collection>(`/collections/${id}`, data).then((r) => r.data),

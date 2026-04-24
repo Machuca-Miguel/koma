@@ -20,10 +20,9 @@ export interface Tag {
   slug: string
 }
 
-export type BindingFormat = 'CARTONE' | 'TAPA_BLANDA' | 'BOLSILLO' | 'OMNIBUS' | 'HARDCOVER' | 'SOFTCOVER' | 'DIGITAL' | 'OTRO'
+export type BindingFormat = 'CARTONE' | 'TAPA_BLANDA' | 'BOLSILLO' | 'OMNIBUS' | 'HARDCOVER' | 'SOFTCOVER' | 'DIGITAL' | 'OTHER'
 
 export interface Comic {
-  seriesPosition: ReactI18NextChildren | Iterable<ReactI18NextChildren>
   id: string
   title: string
   issueNumber?: string
@@ -40,9 +39,8 @@ export interface Comic {
   authors?: string
   scriptwriter?: string
   artist?: string
-  // Relación con la serie (CollectionSeries) a la que pertenece
-  collectionSeriesId?: string
-  collectionSeries?: CollectionSeries
+  // null = importado desde ISBNdb; userId = creado manualmente por ese usuario
+  createdBy?: string | null
 }
 
 // ─── Enums de estado UserComic ─────────────────────────────────────────────
@@ -75,7 +73,22 @@ export interface UserComic {
   notes?: string | null
   addedAt: string
   seriesPosition?: number | null
+  // Serie a la que el usuario asignó este cómic (per-user)
+  collectionSeriesId?: string | null
+  collectionSeries?: CollectionSeries | null
   comic: Comic
+  // Overrides por usuario (no-creadores): se aplican sobre el canónico al mostrar datos
+  titleOverride?: string | null
+  issueNumberOverride?: string | null
+  publisherOverride?: string | null
+  yearOverride?: number | null
+  synopsisOverride?: string | null
+  coverUrlOverride?: string | null
+  bindingOverride?: BindingFormat | null
+  drawingStyleOverride?: string | null
+  authorsOverride?: string | null
+  scriptwriterOverride?: string | null
+  artistOverride?: string | null
 }
 
 // ─── CollectionSeries ──────────────────────────────────────────────────────
@@ -98,12 +111,13 @@ export interface Collection {
   name: string
   description?: string
   isPublic: boolean
+  totalVolumes?: number | null
   rating?: number | null
   createdAt: string
   userId: string
   yearRange?: { min: number; max: number } | null
   previewCovers?: string[]
-  _count?: { comics: number }
+  _count?: { comics: number; series?: number }
 }
 
 export interface CollectionComicUserStatus {
@@ -115,8 +129,12 @@ export interface CollectionComicUserStatus {
 }
 
 // Respuesta del endpoint GET /collections/:id/comics
+// comic incluye collectionSeriesId/Series del UserComic del usuario autenticado
 export interface CollectionComic {
-  comic: Comic
+  comic: Comic & {
+    collectionSeriesId?: string | null
+    collectionSeries?: CollectionSeries | null
+  }
   userStatus?: CollectionComicUserStatus | null
 }
 
@@ -132,6 +150,8 @@ export interface UserSeriesSummary {
   collectionSeriesId: string | null
   seriesName: string
   collectionId: string | null
+  collectionName: string | null
+  isDefault: boolean
   coverUrl: string | null
   totalCount: number | null
   ownedCount: number

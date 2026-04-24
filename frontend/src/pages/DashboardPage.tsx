@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   BookMarked,
   Layers,
@@ -42,7 +43,8 @@ function StatCard({
 // ─── Recently Added Item ──────────────────────────────────────────────────────
 
 function RecentItem({ uc }: { uc: UserComic }) {
-  const date = new Date(uc.addedAt).toLocaleDateString('en', {
+  const { i18n } = useTranslation()
+  const date = new Date(uc.addedAt).toLocaleDateString(i18n.language, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -72,7 +74,7 @@ function RecentItem({ uc }: { uc: UserComic }) {
           {uc.comic.issueNumber ? ` #${uc.comic.issueNumber}` : ''}
         </div>
         <div className="text-xs text-muted-foreground truncate">
-          {uc.comic.collectionSeries?.name ?? uc.comic.publisher ?? ''}
+          {uc.collectionSeries?.name ?? uc.comic.publisher ?? ''}
           {uc.comic.year ? ` (${uc.comic.year})` : ''}
         </div>
       </div>
@@ -86,6 +88,7 @@ function RecentItem({ uc }: { uc: UserComic }) {
 // ─── Wishlist Card ────────────────────────────────────────────────────────────
 
 function WishlistCard({ uc }: { uc: UserComic }) {
+  const { t } = useTranslation()
   return (
     <Link
       to={`/comics/${uc.comic.id}`}
@@ -111,10 +114,10 @@ function WishlistCard({ uc }: { uc: UserComic }) {
       </div>
       <div className="p-3 bg-card">
         <div className="text-[0.6rem] text-muted-foreground font-black uppercase tracking-widest mb-0.5">
-          {uc.comic.year ?? 'Wishlist'}
+          {uc.comic.year ?? t('status.WISHLIST')}
         </div>
         <div className="text-sm font-bold truncate">{uc.comic.title}</div>
-        {uc.comic.collectionSeries?.name && (
+        {uc.collectionSeries?.name && (
           <div className="text-xs text-muted-foreground mt-0.5 truncate">
             {uc.comic.collectionSeries.name}
           </div>
@@ -127,6 +130,8 @@ function WishlistCard({ uc }: { uc: UserComic }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  const { t } = useTranslation()
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['library-stats'],
     queryFn: libraryApi.getStats,
@@ -155,15 +160,15 @@ export function DashboardPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Dashboard"
-        description="Your digital archival vault overview."
+        title={t('dashboard.title')}
+        description={t('dashboard.subtitle')}
         action={
           <Link
             to="/search"
             className="flex items-center gap-2 bg-muted px-4 py-2 rounded-lg text-sm font-bold tracking-tight hover:bg-muted/70 transition-colors border border-border/20"
           >
             <PlusCircle className="size-4" />
-            ADD COMIC
+            {t('dashboard.addComic').toUpperCase()}
           </Link>
         }
       />
@@ -183,23 +188,23 @@ export function DashboardPage() {
           <>
             <StatCard
               icon={<BookMarked className="size-5" />}
-              label="Total Volume"
-              value={`${stats?.total ?? 0} Comics`}
+              label={t('dashboard.statTotalVolume')}
+              value={t('dashboard.statValueComics', { count: stats?.total ?? 0 })}
             />
             <StatCard
               icon={<Layers className="size-5" />}
-              label="Active Series"
-              value={`${stats?.seriesCount ?? 0} Series`}
+              label={t('dashboard.statActiveSeries')}
+              value={t('dashboard.statValueSeries', { count: stats?.seriesCount ?? 0 })}
             />
             <StatCard
               icon={<CheckCircle className="size-5" />}
-              label="Completed"
-              value={`${stats?.byStatus.READ ?? 0} Read`}
+              label={t('dashboard.statCompleted')}
+              value={t('dashboard.statValueRead', { count: stats?.byStatus.READ ?? 0 })}
             />
             <StatCard
               icon={<Heart className="size-5" />}
-              label="Wishlist"
-              value={`${stats?.byStatus.WISHLIST ?? 0} Items`}
+              label={t('dashboard.statWishlist')}
+              value={t('dashboard.statValueItems', { count: stats?.byStatus.WISHLIST ?? 0 })}
             />
           </>
         )}
@@ -210,7 +215,7 @@ export function DashboardPage() {
         {/* Recently Added */}
         <div className="lg:col-span-2">
           <SectionHeader
-            title="Recently added"
+            title={t('dashboard.recentlyAdded')}
             viewAllHref="/library?sortBy=added_desc"
           />
           <div className="space-y-3">
@@ -232,9 +237,9 @@ export function DashboardPage() {
                 ))}
             {!recentLoading && !recentlyAdded?.data.length && (
               <div className="text-center py-10 text-muted-foreground text-sm">
-                No comics yet.{' '}
+                {t('dashboard.noComicsYet')}{' '}
                 <Link to="/search" className="text-primary hover:underline">
-                  Search and add some!
+                  {t('dashboard.searchAndAdd')}
                 </Link>
               </div>
             )}
@@ -246,10 +251,10 @@ export function DashboardPage() {
           <div className="bg-card h-full rounded-xl p-7 border border-border/20 flex flex-col">
             <div className="mb-6">
               <h2 className="text-xl font-bold tracking-tight mb-1">
-                Reading progress
+                {t('dashboard.readingProgress')}
               </h2>
               <p className="text-muted-foreground text-sm">
-                Active curation status across your collection.
+                {t('dashboard.readingProgressDesc')}
               </p>
             </div>
             <div className="flex-1 flex flex-col justify-center text-center">
@@ -288,7 +293,7 @@ export function DashboardPage() {
                         {readPercent}%
                       </span>
                       <span className="text-[0.6rem] font-bold tracking-widest uppercase text-muted-foreground mt-0.5">
-                        Completion
+                        {t('dashboard.completion')}
                       </span>
                     </>
                   )}
@@ -299,15 +304,15 @@ export function DashboardPage() {
               <div className="space-y-3 text-left">
                 <div className="flex justify-between items-center bg-background p-3 rounded-lg border border-border/10">
                   <span className="text-xs font-bold uppercase tracking-tight text-muted-foreground">
-                    Owned
+                    {t('dashboard.ownedLabel')}
                   </span>
                   <span className="text-sm font-bold">
-                    {stats?.byStatus.OWNED ?? 0}
+                    {stats?.byStatus.IN_COLLECTION ?? 0}
                   </span>
                 </div>
                 <div className="flex justify-between items-center bg-background p-3 rounded-lg border border-border/10">
                   <span className="text-xs font-bold uppercase tracking-tight text-muted-foreground">
-                    Read
+                    {t('dashboard.readLabel')}
                   </span>
                   <span className="text-sm font-bold">
                     {stats?.byStatus.READ ?? 0}
@@ -321,7 +326,7 @@ export function DashboardPage() {
               className="mt-7 w-full bg-primary/15 text-primary font-bold py-3 rounded-lg text-sm tracking-widest uppercase flex items-center justify-center gap-2 hover:bg-primary/25 transition-colors"
             >
               <ArrowRight className="size-4" />
-              Go to Library
+              {t('dashboard.goToLibrary')}
             </Link>
           </div>
         </div>
@@ -331,12 +336,12 @@ export function DashboardPage() {
       {(wishlistLoading || hasWishlist) && (
         <section>
           <SectionHeader
-            title="Wishlist"
+            title={t('dashboard.wishlistSection')}
             viewAllHref="/library?status=WISHLIST"
             extra={
               !statsLoading ? (
                 <span className="bg-secondary/20 text-secondary-foreground text-[0.6rem] font-black uppercase px-2 py-0.5 rounded tracking-widest">
-                  {stats?.byStatus.WISHLIST ?? 0} items
+                  {t('dashboard.wishlistItemCount', { count: stats?.byStatus.WISHLIST ?? 0 })}
                 </span>
               ) : undefined
             }

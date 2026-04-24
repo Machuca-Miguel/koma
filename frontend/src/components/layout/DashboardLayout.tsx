@@ -1,5 +1,5 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { BookOpen, Compass, Folders, LayoutDashboard, Library, LogOut, Search, Settings } from 'lucide-react'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { BookOpen, Compass, Folders, LayoutDashboard, Library, LogOut, Search, Settings, Layers, LayoutGrid } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/contexts/AuthContext'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -14,19 +14,32 @@ import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import type { LucideIcon } from 'lucide-react'
 
+const navLinkCls = (isActive: boolean) =>
+  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+    isActive
+      ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+  }`
+
 export function DashboardLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const { t } = useTranslation()
 
-  const navLinks: { to: string; label: string; Icon: LucideIcon }[] = [
-    { to: '/dashboard',   label: t('nav.dashboard'),   Icon: LayoutDashboard },
-    { to: '/library',     label: t('nav.library'),     Icon: Library         },
-    { to: '/search',      label: t('nav.search'),      Icon: Search          },
-    { to: '/collections', label: t('nav.collections'), Icon: Folders         },
-    { to: '/discover',    label: t('nav.discover'),    Icon: Compass   },
-    { to: '/settings',    label: t('nav.settings'),    Icon: Settings  },
+  const bottomLinks: { to: string; label: string; Icon: LucideIcon }[] = [
+    { to: '/search',   label: t('nav.search'),   Icon: Search   },
+    { to: '/discover', label: t('nav.discover'), Icon: Compass  },
+    { to: '/settings', label: t('nav.settings'), Icon: Settings },
   ]
+
+  const libraryLinks: { to: string; label: string; Icon: LucideIcon; end?: boolean }[] = [
+    { to: '/library/collections', label: t('nav.myCollections'), Icon: Folders    },
+    { to: '/library/series',      label: t('nav.mySeries'),      Icon: Layers     },
+    { to: '/library',             label: t('nav.comics'),        Icon: LayoutGrid, end: true },
+  ]
+
+  const isInLibrary = location.pathname.startsWith('/library')
 
   const handleLogout = () => {
     logout()
@@ -50,17 +63,44 @@ export function DashboardLayout() {
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-0.5">
-          {navLinks.map(({ to, label, Icon }) => (
+          {/* Dashboard */}
+          <NavLink
+            to="/dashboard"
+            className={({ isActive }) => navLinkCls(isActive)}
+          >
+            <LayoutDashboard className="size-4 shrink-0" />
+            {t('nav.dashboard')}
+          </NavLink>
+
+          {/* Mi Biblioteca section */}
+          <div>
+            <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${
+              isInLibrary ? 'text-sidebar-foreground font-medium' : 'text-sidebar-foreground/60'
+            }`}>
+              <Library className="size-4 shrink-0" />
+              {t('nav.library')}
+            </div>
+            <div className="ml-3 pl-3 border-l border-sidebar-border/40 space-y-0.5 mt-0.5">
+              {libraryLinks.map(({ to, label, Icon, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) => navLinkCls(isActive)}
+                >
+                  <Icon className="size-4 shrink-0" />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          {/* Remaining links */}
+          {bottomLinks.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                }`
-              }
+              className={({ isActive }) => navLinkCls(isActive)}
             >
               <Icon className="size-4 shrink-0" />
               {label}

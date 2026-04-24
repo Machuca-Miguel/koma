@@ -13,11 +13,19 @@
     "added": "Added",
     "adding": "Adding...",
     "saving": "Saving...",
+    "next": "Next",
     "noResults": "No results",
     "pages": "{{count}} pages",
     "select": "Select",
     "deselect": "Deselect",
-    "optional": "Optional"
+    "optional": "Optional",
+    "edit": "Edit",
+    "deleting": "Deleting...",
+        "viewmode": {
+      "grid": "Grid",
+      "list": "List"
+    },
+    "viewAll": "View all"
   },
   "status": {
     "IN_COLLECTION": "In collection",
@@ -37,13 +45,17 @@
     "BOLSILLO": "Pocket",
     "OMNIBUS": "Omnibus",
     "HARDCOVER": "Hardcover",
-    "DIGITAL": "Digital"
+    "SOFTCOVER": "Softcover",
+    "DIGITAL": "Digital",
+    "OTHER": "Other"
   },
   "nav": {
     "dashboard": "Home",
     "library": "My Library",
+    "myCollections": "Collections",
+    "mySeries": "Series",
+    "comics": "Comics",
     "search": "Search",
-    "collections": "Collections",
     "settings": "Settings",
     "discover": "Discover",
     "logout": "Log out",
@@ -103,7 +115,28 @@
     "rated_other": "{{count}} rated",
     "quickLinks": "Quick links",
     "goToLibrary": "My Library",
-    "searchComics": "Search comics"
+    "searchComics": "Search comics",
+    "title": "Dashboard",
+    "subtitle": "Your digital archival vault overview.",
+    "addComic": "Add comic",
+    "statTotalVolume": "Total Volume",
+    "statActiveSeries": "Active Series",
+    "statCompleted": "Completed",
+    "statWishlist": "Wishlist",
+    "statValueComics": "{{count}} Comics",
+    "statValueSeries": "{{count}} Series",
+    "statValueRead": "{{count}} Read",
+    "statValueItems": "{{count}} Items",
+    "recentlyAdded": "Recently added",
+    "noComicsYet": "No comics yet.",
+    "searchAndAdd": "Search and add some!",
+    "readingProgress": "Reading progress",
+    "readingProgressDesc": "Active curation status across your collection.",
+    "completion": "Completion",
+    "ownedLabel": "Owned",
+    "readLabel": "Read",
+    "wishlistSection": "Wishlist",
+    "wishlistItemCount": "{{count}} items"
   },
   "library": {
     "title": "My Library",
@@ -153,7 +186,6 @@
     "noResultsSearch": "No results for \"{{q}}\"",
     "clearSearch": "Clear",
     "filterByTag": "Tag",
-    "noSeries": "No series",
     "seriesCount": "{{count}} iss.",
     "seriesComicsCount": "{{count}} comics in your library",
     "checkCompletion": "Check completion",
@@ -175,6 +207,8 @@
     "viewGrid": "Grid view",
     "viewSeries": "Series view",
     "noSeries": "No series in your library",
+    "filterComplete": "Complete",
+    "filterIncomplete": "Incomplete",
     "issues": "issues",
     "ongoing": "Ongoing",
     "complete": "Complete",
@@ -189,7 +223,11 @@
     "completeHint": "The series is finished",
     "seriesUpdated": "«{{name}}» updated",
     "seriesCreated": "«{{name}}» created",
-    "selectCollection": "Select a collection…"
+    "selectCollection": "Select a collection…",
+    "footerTotalLabel": "Total Issues",
+    "footerReadStatusLabel": "Read Status",
+    "footerComplete": "{{percent}}% Complete",
+    "footerPage": "Page {{page}} of {{total}}"
   },
   "search": {
     "title": "Search comics",
@@ -253,17 +291,21 @@
       "emptyStateCta": "Not what you were looking for?",
       "collection": "Add to collection (optional)",
       "collectionSearch": "Search collections...",
+      "series": "Series (optional)",
+      "newSeries": "New series",
+      "seriesPosition": "Position in series",
       "fields": {
         "title": "Title *",
-        "series": "Series",
-        "issueNumber": "Issue #",
         "publisher": "Publisher",
         "year": "Year",
         "isbn": "ISBN",
         "binding": "Binding",
         "coverUrl": "Cover URL",
         "drawingStyle": "Drawing style",
-        "synopsis": "Synopsis"
+        "synopsis": "Synopsis",
+        "authors": "Authors",
+        "scriptwriter": "Scriptwriter",
+        "artist": "Artist"
       }
     }
   },
@@ -284,6 +326,8 @@
     "descPlaceholder": "A brief description...",
     "totalVolumesLabel": "Total volumes",
     "totalVolumesPlaceholder": "e.g. 12",
+    "initialSeriesLabel": "First series",
+    "initialSeriesPlaceholder": "e.g. Main, Arc 1…",
     "public": "Public",
     "publicHint": "Anyone can see it",
     "private": "Private",
@@ -302,6 +346,11 @@
     "allComicsAdded": "All comics are already in this collection",
     "showComics": "Show comics",
     "hideComics": "Hide comics",
+    "seriesLabel": "Series",
+    "seriesProgressComplete": "completed",
+    "issuesLabel": "Issues",
+    "allSeries": "All series",
+    "unsorted": "Unsorted",
     "comicCount_one": "{{count}} comic",
     "comicCount_other": "{{count}} comics",
     "addComic": "Add comic",
@@ -347,6 +396,11 @@
     "noOtherCollections": "No other collections",
     "newCollectionName": "New collection name...",
     "confirmAdd": "Add {{count}}",
+    "pickSeriesTitle": "Select series",
+    "principalSeries": "Principal (default)",
+    "default": "Default",
+    "createSeriesTitle": "New series",
+    "seriesNamePlaceholder": "Series name...",
     "addMultipleSuccess": "{{count}} comics added",
     "export": "Export",
     "badge_IN_COLLECTION": "In collection",
@@ -358,7 +412,19 @@
     "updateStatusError": "Could not update status",
     "positionHint": "Click to change position",
     "addToCollectionTitle": "Add {{count}} to a collection",
-    "filterPlaceholder": "Filter collections..."
+    "filterPlaceholder": "Filter collections...",
+    "ratingLabel": "Rating",
+    "yearRange": "Years",
+    "removeComic": "Remove",
+    "addComics": "Add comics",
+    "searchLibrary": "Search your library...",
+    "searchComics": "Search in collection...",
+    "emptyComicsHint": "Add comics from your library to get started.",
+    "deleteTitle": "Delete collection",
+    "deleteConfirm": "This action cannot be undone. All associations will be removed.",
+    "configureSeriesTitle": "Configure series",
+    "seriesNameLabel": "Series name",
+    "seriesNameHint": "You can rename it or keep the default."
   },
   "comicDetail": {
     "back": "Back",
@@ -408,14 +474,6 @@
     "character": "Character",
     "genre": "Genre",
     "characters": "Characters",
-    "status": {
-      "OWNED": "In collection",
-      "READ": "Read",
-      "WISHLIST": "Wishlist",
-      "FAVORITE": "Favorite",
-      "LOANED": "Loaned"
-    },
-    "loanedToPlaceholder": "Loaned to...",
     "tagsLabel": "Tags",
     "addTag": "Add tag...",
     "editComic": "Edit comic",
@@ -465,7 +523,9 @@
     "newCollectionPlaceholder": "Collection name...",
     "saveToCollection": "Save to Collection",
     "savedToCollection": "Saved to collection",
-    "principalHint": "This issue will be linked to the primary story arc by default."
+    "principalHint": "This issue will be linked to the primary story arc by default.",
+    "volumeNumber": "Volume #",
+    "volumeNumberPlaceholder": "e.g. 1"
   },
   "settings": {
     "title": "Settings",
@@ -670,6 +730,7 @@
   },
   "seriesDetail": {
     "backToLibrary": "Back to Library",
+    "viewAll": "View all",
     "vaultProgress": "Vault Progress",
     "of": "of",
     "addIssue": "Add Issue",
@@ -678,6 +739,10 @@
     "search": "Search",
     "noTotalHint": "Set total issues to detect gaps",
     "empty": "No issues in this series yet",
-    "notFound": "Series not found"
+    "notFound": "Series not found",
+    "addFromLibrary": "From library",
+    "addIssueSearch": "Search new issue",
+    "noLibraryComics": "No unassigned comics in library",
+    "assign": "Assign to series"
   }
 }

@@ -1,6 +1,6 @@
 # Koma — Documentación completa de la aplicación
 
-> Versión: 1.0 · Fecha: 2026-03-29
+> Versión: 1.1 · Fecha: 2026-04-20
 > Para: portfolio, referencia técnica y manual de usuario
 
 ---
@@ -9,9 +9,9 @@
 
 Koma es una aplicación web personal para gestionar colecciones de cómics. Permite al coleccionista llevar un registro de lo que tiene, lo que ha leído, lo que quiere conseguir y lo que ha prestado — todo desde una interfaz limpia y rápida.
 
-Se integra con la **Grand Comics Database (GCD)**, una base de datos local de cómics (europeos, americanos y más), para importar información rica: portadas, creadores, sinopsis, series completas, ISBN, precio, etc. Los cómics también se pueden añadir manualmente si no están en GCD.
+Se integra con **ISBNdb**, una base de datos global de libros con más de 35 millones de títulos, para importar metadatos: portadas, autores, editorial, sinopsis, ISBN, etc. Los cómics también se pueden añadir manualmente si no están en ISBNdb.
 
-La app incluye además **recomendaciones por IA** basadas en la colección personal, y **completitud de series** para saber exactamente qué números faltan de cada serie.
+La app incluye además **recomendaciones por IA** basadas en la colección personal, y **vista de series** para ver el progreso de cada serie de la colección.
 
 ---
 
@@ -27,7 +27,7 @@ La app incluye además **recomendaciones por IA** basadas en la colección perso
 │                                                             │
 │  /dashboard      Resumen de la colección (home)             │
 │  /library        Biblioteca personal — todos los cómics     │
-│  /search         Buscador en GCD + añadir manualmente       │
+│  /search         Buscador en ISBNdb + añadir manualmente     │
 │  /comics/:id     Ficha detallada de un cómic                │
 │  /collections    Colecciones temáticas del usuario          │
 │  /discover       Recomendaciones IA + resumen de series     │
@@ -53,7 +53,7 @@ Usuario entra en la app por primera vez
         ▼
   /dashboard — ve su colección vacía con accesos rápidos
         │
-        ├──► /search — busca sus primeros cómics en GCD
+        ├──► /search — busca sus primeros cómics en ISBNdb
         │       │
         │       └──► Los importa → van a /library como "Tengo"
         │
@@ -68,7 +68,7 @@ Usuario abre la app
         ▼
   /dashboard — revisa sus estadísticas (cuántos tiene, ha leído, etc.)
         │
-        ├──► Acaba de comprar un cómic → /search → busca → importa
+        ├──► Acaba de comprar un cómic → /search (ISBNdb) → busca → importa
         │
         ├──► Quiere ver qué le falta de una serie → /library
         │       └──► "Ver qué falta" en el grupo de serie
@@ -176,59 +176,35 @@ Usuario quiere organizar su colección
 
 ---
 
-### Buscador GCD (`/search`)
+### Buscador (`/search`)
 
-**Propósito:** encontrar cómics en la base de datos Grand Comics Database e importarlos a la colección personal.
+**Propósito:** encontrar cómics en ISBNdb e importarlos a la colección personal.
 
-#### Búsqueda en GCD
+#### Búsqueda en ISBNdb
 
 **Cómo buscar:**
-1. Escribir el título o nombre de serie en el campo principal
-2. Opcionalmente añadir filtros: editorial, creador/autor, año de publicación
-3. Pulsar "Buscar" (o Enter)
+1. Escribir el título, autor o editorial en el campo principal
+2. Pulsar "Buscar" (o Enter)
+3. Alternativamente, introducir un ISBN-10 o ISBN-13 directamente
 
-**Filtros avanzados (siempre visibles):**
-- **Editorial:** texto libre (ej. "Dargaud", "Marvel")
-- **Creador/Autor:** texto libre (ej. "Moebius", "Alan Moore")
-- **Año:** número entre 1900 y el año actual
-
-Los filtros se combinan con la búsqueda por texto. Se pueden usar filtros solos sin texto.
-
-**Resultados GCD — modo serie (por defecto):**
-- Grid de tarjetas de serie: nombre, editorial, años de publicación, número de issues
-- Al hacer click en una tarjeta de serie → se abre el sheet lateral de issues
-
-**Sheet lateral de issues de la serie:**
-```
-Astérix (Goscinny & Uderzo)
-■■■■░░░░░░  5 de 37 números  (13%)
-
-#1  Astérix el Galo          [+ Añadir]
-#2  La hoz de oro            [✓ En colección]
-#3  Astérix y los godos      [+ Añadir]
-...
-```
-- Botón "Añadir" por issue → importa de GCD + añade como "Tengo"
-- Issues ya en la colección muestran ✓ verde
-
-**Resultados fuentes externas (Google Books, Open Library, Tebeosfera, Whakoom):**
-- Grid de tarjetas con portada, título, autor, editorial, año
-- Botón "Añadir" en cada tarjeta → añade como "Tengo"
+**Resultados:**
+- Grid de tarjetas con portada, título, autor, editorial, año e ISBN
+- Botón "Añadir" en cada tarjeta → crea el cómic en la BD local (si no existe por ISBN) y lo añade como `IN_COLLECTION`
 - Paginación de 20 en 20
 
 #### Añadir manualmente
 
-Disponible en fuentes externas cuando la búsqueda no da resultados.
+Disponible cuando la búsqueda no da resultados.
 
 **Campos:**
 - Título (obligatorio — botón deshabilitado si está vacío)
-- Issue #, Año, Editorial, URL de portada
+- Issue #, Año, Editorial, URL de portada, ISBN
 
-El cómic creado manualmente queda en la biblioteca como "Tengo" sin datos externos.
+El cómic creado manualmente queda en la biblioteca como `IN_COLLECTION`.
 
 #### Caso de uso típico
 
-> El usuario quiere añadir todos los Astérix que tiene. Busca "Asterix" en GCD (fuente por defecto, modo serie). Ve la card de la serie "Astérix" (Dargaud, 1961–actualidad, 37 números). La pulsa, y el sheet lateral muestra todos los 37 issues indicando cuáles ya tiene en su colección. Pulsa "Añadir" en los que tiene físicamente. Todos se añaden como "Tengo" a la biblioteca.
+> El usuario quiere añadir "Watchmen". Busca "Watchmen" en la barra de búsqueda. Ve el resultado con portada, "Alan Moore / Dave Gibbons / DC Comics / 1987". Pulsa "Añadir". El cómic se importa desde ISBNdb y aparece en su biblioteca.
 
 ---
 
@@ -288,46 +264,29 @@ Menú desplegable con opciones:
 
 #### Vista de series (por defecto, `sortBy=series_asc`)
 
-Cuando la ordenación es "Serie", la biblioteca muestra **una tarjeta por serie**:
+Cuando la ordenación es "Serie", la biblioteca muestra **una tarjeta por serie** (agrupadas por `CollectionSeries`):
 
 ```
 [portada]  Astérix
            Dargaud
            ■■■■░░░░  12/37 · 32%
-           [Ver completitud →]
+           [Ver serie →]
 
 [portada]  Blake y Mortimer
            Le Lombard
-           ■■░░░░░░  5/24 · 20%
-           [Ver completitud →]
+           [Ver serie →]
 ```
 
-- La portada es la del primer issue importado (o la de la entidad Series si existe)
-- La barra de progreso aparece cuando la serie está enlazada a GCD y tiene `totalIssues`
+- La portada es la del primer issue de la serie
+- La barra de progreso aparece cuando `totalVolumes` está configurado en la `CollectionSeries`
 - Si todos los números están en colección → barra verde "¡Serie completa!"
-- El botón "Ver completitud" (o click en la tarjeta) abre el panel lateral
+- Click en la tarjeta navega a `/library/series/:id`
 
-#### Panel de completitud de serie
+#### Página de serie (`/library/series/:id`)
 
-Se abre como sheet lateral al pulsar "Ver completitud" o al clicar la tarjeta de serie:
-
-```
-Astérix
-
-■■■■■■■■░░  12 de 37 números  (32%)
-
-#1  Astérix el Galo           [✓ En colección]
-#2  La hoz de oro             [✓ En colección]
-#3  Astérix y los godos       [🔖 Añadir a wishlist]
-#4  Astérix Gladiador         [🔖 Añadir a wishlist]
-...
-```
-
-Al pulsar "Añadir a wishlist" en un número:
-1. El issue se importa desde GCD (crea/enlaza la entidad Serie automáticamente)
-2. Se añade a la biblioteca con estado "Wishlist"
-3. El botón cambia a ✓ verde sin recargar
-4. La barra de progreso se actualiza localmente
+- Lista todos los cómics de la serie con su estado en la biblioteca
+- Barra de progreso si `totalVolumes` está configurado
+- Reordenación manual de posición dentro de la serie
 
 #### Eliminar un cómic
 
@@ -335,7 +294,7 @@ Requiere doble confirmación para evitar borrados accidentales:
 1. Clic en 🗑 → icono cambia a ✓
 2. Clic en ✓ → confirma el borrado
 
-El cómic desaparece de la biblioteca (pero no se elimina de la BD local — se puede volver a añadir desde GCD o búsqueda).
+El cómic desaparece de la biblioteca (pero no se elimina de la BD local — se puede volver a añadir desde ISBNdb o búsqueda).
 
 #### Paginación
 
@@ -401,12 +360,14 @@ Zona de etiquetas siempre visible en el hero:
 #### Estado personal
 
 ```
-[☑ Tengo]  [☐ Leído]  [☑ Wishlist]  [☐ Favorito]
+Posesión:  [☑ IN_COLLECTION]  [☐ WISHLIST]  [☐ LOANED]
+Lectura:   [☑ READ]           [☐ READING]   [☐ TO_READ]
+Venta:     [☐ FOR_SALE]       [☐ TO_SELL]   [☐ SOLD]
 
-[☐ Prestado]  Prestado a: ________________
+Prestado a: ________________  (activo cuando collectionStatus = LOANED)
 ```
 
-Los estados son **independientes y acumulables**. Un mismo cómic puede estar en "Tengo" + "Leído" + "Favorito" simultáneamente.
+Los estados son **independientes y acumulables** entre grupos. Un mismo cómic puede tener `IN_COLLECTION` + `READ` + `FOR_SALE` simultáneamente (tres grupos independientes).
 
 El campo "Prestado a" se activa cuando se marca "Prestado" y permite escribir el nombre de quien lo tiene.
 
@@ -423,9 +384,9 @@ El campo "Prestado a" se activa cuando se marca "Prestado" y permite escribir el
 
 Textarea con autoguardado: el texto se guarda 500ms después de dejar de escribir, sin necesidad de pulsar ningún botón. El usuario puede escribir libremente.
 
-#### Secciones de información (desde GCD)
+#### Secciones de información
 
-Solo visibles si el cómic fue importado desde GCD y GCD tiene esos datos:
+Datos disponibles según lo que ISBNdb o el usuario hayan proporcionado:
 
 **Sinopsis:** texto descriptivo del contenido.
 
@@ -495,7 +456,18 @@ Al pulsar sobre una colección, se expande mostrando las portadas de los cómics
 
 #### Añadir cómics a una colección
 
-Selector con todos los cómics de la biblioteca (solo los que no están ya en la colección). Al seleccionar, el cómic se añade inmediatamente.
+El componente `AddToCollectionSheet` es un wizard de 2 pasos reutilizable, accesible desde `ComicDetailPage` (modo individual) y `LibraryPage` (modo multi-selección).
+
+**PASO 1 — Seleccionar colección**
+- Lista de colecciones existentes del usuario (con buscador/filtro)
+- Opción "+Nueva colección": despliega un campo de nombre; el botón cambia a "Crear"
+  - Al pulsar "Crear": se crea la colección (con serie "Principal" por defecto) y se avanza automáticamente al Paso 2
+- Al seleccionar una colección existente: el botón dice "Siguiente" y avanza al Paso 2
+
+**PASO 2 — Seleccionar / configurar serie**
+- *Colección nueva:* muestra un input de texto editable pre-relleno con el nombre de la serie por defecto ("Principal"). El usuario puede renombrarlo antes de confirmar.
+- *Colección existente:* muestra la lista de series de esa colección para elegir destino.
+- Al pulsar "Añadir": si el nombre fue cambiado, hace `PATCH /collections/:id/series/:seriesId` primero (atómico), luego añade los cómics vía `POST /my-library/to-collection`.
 
 Un cómic puede estar en múltiples colecciones. Las colecciones son independientes de los estados (Tengo, Leído, etc.).
 
@@ -625,47 +597,61 @@ Las etiquetas son una funcionalidad transversal a toda la app.
 
 Un cómic puede tener **varios estados activos simultáneamente**. Esto es diferente a otros gestores de colección que solo permiten un estado exclusivo.
 
-### Estados disponibles
+### Grupos de estado
 
-| Estado | Badge | Uso |
-|---|---|---|
-| `Tengo` | Morado claro | Lo poseo físicamente |
-| `Leído` | Verde | Lo he leído |
-| `Wishlist` | Azul | Lo quiero conseguir |
-| `Favorito` | Naranja/coral | Especialmente recomendado |
-| `Prestado` | Violeta | Lo tengo prestado a alguien |
+**Grupo 1 — Posesión (`collectionStatus`):**
+
+| Valor | Uso |
+|---|---|
+| `IN_COLLECTION` | Lo poseo físicamente |
+| `WISHLIST` | Lo quiero conseguir |
+| `LOANED` | Lo tengo prestado a alguien |
+
+**Grupo 2 — Lectura (`readStatus`):**
+
+| Valor | Uso |
+|---|---|
+| `READ` | Lo he leído |
+| `READING` | Lo estoy leyendo |
+| `TO_READ` | Pendiente de leer |
+
+**Grupo 3 — Venta (`saleStatus`):**
+
+| Valor | Uso |
+|---|---|
+| `FOR_SALE` | A la venta (precio negociable) |
+| `TO_SELL` | Quiero venderlo en algún momento |
+| `SOLD` | Vendido — implica `collectionStatus = null` |
 
 ### Combinaciones típicas
 
 | Combinación | Significado |
 |---|---|
-| Tengo | Está en la colección, sin leer aún |
-| Tengo + Leído | Lo tengo y ya lo he leído |
-| Tengo + Leído + Favorito | Lo tengo, leído y es de mis favoritos |
-| Tengo + Prestado | Lo tengo pero está prestado a alguien |
-| Wishlist | Quiero conseguirlo, no lo tengo |
+| `IN_COLLECTION` | En la colección, sin leer |
+| `IN_COLLECTION` + `READ` | Tengo y he leído |
+| `IN_COLLECTION` + `READ` + `FOR_SALE` | Lo tengo, lo he leído y lo quiero vender |
+| `LOANED` | Prestado (aún es mío) |
+| `WISHLIST` | Quiero conseguirlo |
 
 ### Implicaciones en la interfaz
 
-- En **biblioteca**: los badges muestran todos los estados activos simultáneamente
-- En **dashboard**: las estadísticas cuentan cada estado independientemente (la suma puede superar el total)
-- En **ficha**: cada toggle es independiente; activar "Tengo" no desactiva "Wishlist"
-- **"Dónde comprar"**: solo aparece cuando `isWishlist=true` e `isbn` disponible
+- En **biblioteca**: los badges muestran los estados activos de los tres grupos
+- En **dashboard**: las estadísticas cuentan cada grupo independientemente
+- En **ficha**: cada grupo es independiente; activar `IN_COLLECTION` no desactiva `WISHLIST`
+- **"Dónde comprar"**: solo aparece cuando `collectionStatus = WISHLIST` e `isbn` disponible
+- **`SOLD`** limpia `collectionStatus` automáticamente
 
 ---
 
-## Integración con GCD (Grand Comics Database)
+## Integración con ISBNdb
 
-GCD es una base de datos comunitaria de cómics. La app usa una **copia local** en MySQL que se consulta directamente — no hay llamadas a internet para las búsquedas.
+ISBNdb es una API global de libros y cómics con más de 35 millones de registros. El backend actúa como proxy y solo realiza llamadas a la API de ISBNdb cuando el usuario busca — no hay base de datos de catálogo local.
 
-### Qué datos proporciona GCD
+### Qué datos proporciona ISBNdb
 
-- Metadatos del issue: título, número, editorial, año, precio, páginas, fecha de venta, código de barras, ISBN
-- **Creadores** con su rol exacto: guionista, dibujante, entintador, colorista, rotulista, editor
-- **Historias** del número: cada relato independiente con su título, tipo, género, personajes, sinopsis
-- **Serie**: nombre, formato, años de publicación, número total de issues, color, dimensiones, papel, encuadernación
-- **Editorial**: nombre, web oficial, años de actividad
-- **Portada**: se obtiene via Open Library a partir del ISBN válido cuando GCD lo tiene
+- Metadatos del libro: título, autores, editorial, año, sinopsis, portada (imagen), ISBN-13, ISBN-10
+- Información de ediciones alternativas del mismo ISBN
+- Búsqueda por título, autor, editorial o tema
 
 ### Proceso de importación
 
@@ -673,33 +659,28 @@ GCD es una base de datos comunitaria de cómics. La app usa una **copia local** 
 Usuario busca "Blacksad" en /search
            │
            ▼
-  GCD devuelve los issues que coinciden
+  GET /isbndb/books/search?q=Blacksad (API ISBNdb externa)
+           │
+           ▼
+  Resultados: lista de libros con portada, autores, ISBN…
            │
            ▼
   Usuario pulsa "Añadir a biblioteca"
            │
            ▼
-  La app guarda los datos de ese issue en la BD local (PostgreSQL)
-  como un cómic propio del usuario
+  POST /isbndb/import { book } → crea Comic en PostgreSQL
+  (idempotente: si ya existe por isbn, devuelve el existente)
            │
            ▼
-  El cómic aparece en /library con todos sus datos de GCD
-  y con el campo externalId que lo vincula a GCD
+  POST /my-library { comicId, collectionStatus: "IN_COLLECTION" }
            │
            ▼
-  En /comics/:id → la app consulta GCD en tiempo real
-  para mostrar creadores, historias, serie, editorial
+  El cómic aparece en /library con los datos de ISBNdb
 ```
 
-### Completitud de series
+### Deduplicación
 
-Funciona gracias al vínculo con GCD:
-1. La app toma el `externalId` de un cómic de la serie
-2. Consulta GCD: "¿cuántos issues tiene esta serie en total?"
-3. Cruza con la biblioteca del usuario: "¿cuáles de esos issues tiene?"
-4. Devuelve: lista de issues que faltan + porcentaje de completitud
-
-Solo funciona para cómics importados desde GCD (no para cómics añadidos manualmente).
+El campo `isbn` es único en la tabla `comics`. Si dos usuarios importan el mismo ISBN, comparten el mismo registro canónico pero tienen `UserComic` independientes con sus propios estados y overrides.
 
 ---
 
@@ -725,14 +706,14 @@ Desde la ficha de cómic (`/comics/:id`), en la sección de estado personal:
 ### Registrar un préstamo
 
 1. Ir a `/comics/:id`
-2. Activar el toggle "Prestado"
-3. Escribir el nombre de la persona en "Prestado a"
+2. Cambiar `collectionStatus` a `LOANED`
+3. Escribir el nombre de la persona en "Prestado a" (`loanedTo`)
 
-El campo "Prestado a" es texto libre. No hay sistema de seguimiento automatizado — es solo un registro personal.
+El campo `loanedTo` es texto libre. No hay sistema de seguimiento automatizado — es solo un registro personal.
 
 ### Consultar préstamos activos
 
-En `/library` con el filtro de estado "Prestado" (visible en los filtros). También se puede buscar por nombre en la barra de búsqueda si se recuerda el título.
+En `/library` con el filtro `status=LOANED`. También se puede buscar por nombre en la barra de búsqueda si se recuerda el título.
 
 ---
 
@@ -782,7 +763,7 @@ El cambio de idioma es **instantáneo** sin recargar la página. La preferencia 
 ### Errores
 
 - **Toasts de error** (rojo): aparecen en la esquina de la pantalla y se autoeliminan. Mensajes específicos según el error (contraseña incorrecta, usuario en uso, error de red, etc.)
-- **Estados vacíos:** cuando una búsqueda o filtro no da resultados, aparece un mensaje contextual con sugerencia de acción (limpiar filtros, buscar en GCD, etc.)
+- **Estados vacíos:** cuando una búsqueda o filtro no da resultados, aparece un mensaje contextual con sugerencia de acción (limpiar filtros, buscar en ISBNdb, etc.)
 - **404 de cómic:** si se accede a `/comics/:id` con un ID inválido, aparece un mensaje "Cómic no encontrado" con opción de volver
 
 ---
@@ -795,11 +776,11 @@ El cambio de idioma es **instantáneo** sin recargar la página. La preferencia 
 
 1. Abre Koma → `/search`
 2. Escribe "Eternauta" en el buscador → pulsa Buscar
-3. Ve el resultado en GCD → pulsa el título para ver el detalle (creadores, sinopsis)
+3. Ve el resultado en ISBNdb con portada, autor y editorial
 4. Pulsa "Añadir a biblioteca"
-5. Va a `/comics/:id` → activa "Tengo" si no está ya activo
+5. Va a `/comics/:id` → confirma que `collectionStatus = IN_COLLECTION`
 6. Añade etiqueta "sci-fi" y "argento" → Enter
-7. Sale. El cómic aparece en su biblioteca con portada y todos los datos de GCD.
+7. Sale. El cómic aparece en su biblioteca con portada y datos de ISBNdb.
 
 ---
 
@@ -809,7 +790,7 @@ El cambio de idioma es **instantáneo** sin recargar la página. La preferencia 
 
 1. Va a `/library` → busca "Maus" en la barra de búsqueda
 2. Pulsa la tarjeta → va a `/comics/:id`
-3. Activa el toggle "Leído"
+3. Cambia `readStatus` a `READ`
 4. Pulsa la 5ª estrella (valoración máxima)
 5. Escribe en las notas: "Obra fundamental. El arte en blanco y negro potencia el impacto."
 6. Las notas se guardan automáticamente a los 500ms.
@@ -821,13 +802,9 @@ El cambio de idioma es **instantáneo** sin recargar la página. La preferencia 
 
 **Contexto:** el usuario va a ir a la feria del cómic el próximo fin de semana.
 
-1. Va a `/library` → "Ver qué falta" en la serie Corto Maltés
-2. El panel muestra: faltan 8 de 15 números. Ve cuáles son.
-3. Pulsa "Añadir a wishlist" en los 3 que más le interesan
-4. Cierra el panel → filtra la biblioteca por "Wishlist"
-5. Ve todos los cómics que quiere comprar (incluyendo los de wishlist de otras series)
-6. Para cada uno con ISBN, entra en la ficha y ve los precios estimados en Amazon/FNAC
-7. Antes de salir, exporta la lista en CSV desde `/settings` → Datos → Exportar CSV
+1. Va a `/library` → filtra por `WISHLIST` → ve todos los cómics pendientes de compra
+2. Para cada uno con ISBN, entra en la ficha y accede a los links de compra (Amazon/FNAC)
+3. Exporta la lista en CSV desde `/settings` → Datos → Exportar CSV
 
 ---
 
@@ -837,10 +814,10 @@ El cambio de idioma es **instantáneo** sin recargar la página. La preferencia 
 
 1. Va a `/library` → busca "Persépolis"
 2. Pulsa la tarjeta → va a `/comics/:id`
-3. Activa "Prestado" → escribe "Carlos" en "Prestado a"
+3. Cambia `collectionStatus` a `LOANED` → escribe "Carlos" en `loanedTo`
 4. El badge "Prestado" aparece en la tarjeta de la biblioteca
-5. Semanas después, cuando quiere saber qué tiene prestado, va a `/library` → filtra por "Prestado"
-6. Ve "Persépolis — Carlos" → va a la ficha → desactiva "Prestado" cuando lo recupera
+5. Semanas después, cuando quiere saber qué tiene prestado, va a `/library` → filtra por `LOANED`
+6. Ve "Persépolis — Carlos" → va a la ficha → cambia `collectionStatus` a `IN_COLLECTION` cuando lo recupera
 
 ---
 
@@ -852,8 +829,8 @@ El cambio de idioma es **instantáneo** sin recargar la página. La preferencia 
 2. Pulsa "Generar recomendaciones" (tarda ~5 segundos)
 3. Aparecen 6 recomendaciones con justificación personalizada:
    - "Dado que tienes Moebius y te gusta el estilo de línea clara, te encantará Blueberry de Jean Girard"
-4. Anota los que le interesan → va a `/search` y los busca
-5. Los que encuentra en GCD los añade como "Wishlist"
+4. Anota los que le interesan → va a `/search` y los busca en ISBNdb
+5. Los que encuentra los añade como `WISHLIST`
 
 ---
 
@@ -872,14 +849,17 @@ El cambio de idioma es **instantáneo** sin recargar la página. La preferencia 
 
 | Término | Significado |
 |---|---|
-| GCD | Grand Comics Database — base de datos de cómics usada como catálogo |
+| ISBNdb | Base de datos global de libros y cómics usada como fuente externa de metadatos |
 | Issue | Número individual de una serie de cómics |
-| Serie | Conjunto de issues relacionados bajo el mismo título |
-| Tengo | Estado: el usuario posee físicamente el cómic |
-| Wishlist | Lista de deseos: el usuario quiere conseguir el cómic |
+| CollectionSeries | Agrupación de cómics dentro de una Colección (ej. "Principal", "Edición Deluxe") |
+| UserComic | Registro pivote que representa un cómic en la biblioteca personal de un usuario |
+| IN_COLLECTION | Estado de posesión: el usuario tiene el cómic físicamente |
+| WISHLIST | Estado de deseo: el usuario quiere conseguir el cómic |
+| LOANED | Estado de préstamo: el cómic está prestado a alguien |
 | Slug | Versión normalizada de una etiqueta (sin espacios ni acentos), usada internamente |
 | Cartoné | Encuadernación de tapa dura con lomo cuadrado, habitual en cómic europeo |
 | JWT | Token de autenticación guardado en localStorage para mantener la sesión |
 | Debounce | Técnica que retrasa la ejecución de una acción hasta que el usuario deja de escribir |
 | Toast | Notificación temporal (éxito/error) que aparece en la esquina de la pantalla |
 | Skeleton | Placeholder visual animado que se muestra mientras carga el contenido real |
+| Override | Campo de `UserComic` que sobreescribe un dato del cómic canónico solo para ese usuario |

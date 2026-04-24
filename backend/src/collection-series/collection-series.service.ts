@@ -9,7 +9,7 @@ export class CollectionSeriesService {
     return this.prisma.collectionSeries.findMany({
       where: { collectionId },
       orderBy: [{ isDefault: 'desc' }, { position: 'asc' }, { createdAt: 'asc' }],
-      include: { _count: { select: { comics: true } } },
+      include: { _count: { select: { userComics: true } } },
     });
   }
 
@@ -30,8 +30,8 @@ export class CollectionSeriesService {
 
   async remove(id: string) {
     await this.findOne(id);
-    // Unlink comics from this series before deleting
-    await this.prisma.comic.updateMany({
+    // Unlink user comics from this series before deleting
+    await this.prisma.userComic.updateMany({
       where: { collectionSeriesId: id },
       data: { collectionSeriesId: null },
     });

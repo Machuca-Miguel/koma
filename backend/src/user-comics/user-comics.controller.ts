@@ -30,6 +30,7 @@ import { UserComicsService } from './user-comics.service';
 import type { SortBy, StatusFilter } from './user-comics.service';
 import { AddComicDto } from './dto/add-comic.dto';
 import { UpdateUserComicDto } from './dto/update-user-comic.dto';
+import { AddComicsToCollectionDto } from './dto/add-to-collection.dto';
 
 class AddByIsbnDto {
   @IsString()
@@ -245,6 +246,15 @@ export class UserComicsController {
   @ApiOperation({ summary: 'Agregar un cómic a mi biblioteca' })
   add(@Request() req: AuthenticatedRequest, @Body() dto: AddComicDto) {
     return this.userComicsService.add(req.user.id, dto);
+  }
+
+  @Post('to-collection')
+  @ApiOperation({ summary: 'Asignar múltiples cómics de la biblioteca a una serie (atómico)' })
+  addMultipleToCollection(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: AddComicsToCollectionDto,
+  ) {
+    return this.userComicsService.addMultipleToCollection(req.user.id, dto);
   }
 
   @Post('add-by-isbn')

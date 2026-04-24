@@ -1,15 +1,29 @@
 # Database — Koma
 
-El proyecto usa **dos bases de datos independientes**:
-
-| BD | Motor | Propósito | Acceso |
-|---|---|---|---|
-| PostgreSQL (Neon) | PostgreSQL | Datos del usuario: cómics, biblioteca, colecciones | Prisma 7 |
-| `comics_db` | MySQL | Catálogo GCD (~3.5M issues, solo lectura) | mysql2 pool |
+El proyecto usa **una única base de datos**: PostgreSQL gestionada con Prisma 7, alojada en Neon.
 
 ---
 
-## PostgreSQL — Prisma Schema
+## Jerarquía del modelo de datos
+
+```
+Collection (colección temática del usuario)
+  └── CollectionSeries (serie dentro de la colección, ej. "Principal", "Edición Deluxe")
+        └── UserComic (asignación del cómic a esa serie)
+              └── Comic (registro canónico del cómic)
+
+UserComic (biblioteca personal del usuario)
+  → flags: collectionStatus, readStatus, saleStatus, loanedTo, rating, notes
+  → overrides: título, portada, sinopsis... por usuario
+```
+
+- Una `Collection` crea automáticamente una `CollectionSeries` llamada "Principal" (`isDefault: true`).
+- Un `Comic` libre (sin serie asignada) tiene `collectionSeriesId = null` — solo aparece en la biblioteca via `UserComic`.
+- La deduplicación de cómics se hace por campo `isbn` (único, obligatorio). ISBNdb es la fuente externa.
+
+---
+
+## Modelos
 
 ### `users`
 
@@ -27,263 +41,186 @@ El proyecto usa **dos bases de datos independientes**:
 
 ---
 
-### `series`
-
-Entidad propia para series de cómics. Agrupa issues y permite tracking de completitud.
-
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `id` | String (cuid) | PK |
-| `name` | String | Nombre de la serie |
-| `publisher` | String? | Editorial |
-| `year_began` | Int? | Año de inicio |
-| `year_ended` | Int? | Año de fin (null si sigue activa) |
-| `total_issues` | Int? | Total de números en la serie (de GCD) |
-| `gcd_series_id` | Int? unique | ID de la serie en `gcd_series.id` (null si no viene de GCD) |
-| `cover_url` | String? | Portada representativa |
-| `is_ongoing` | Boolean | `true` si la serie sigue publicándose (default true) |
-| `created_at` | DateTime | — |
-| `updated_at` | DateTime | — |
-
----
-
 ### `comics`
 
+Registro canónico e inmutable. Los usuarios no editan este registro directamente — usan los campos `*Override` en `user_comics`.
+
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | String (cuid) | PK |
-| `title` | String | Título del issue |
-| `issue_number` | String? | Número del issue |
+| `title` | String | Título |
+| `issue_number` | String? | Número de issue |
 | `publisher` | String? | Editorial |
 | `year` | Int? | Año de publicación |
 | `synopsis` | Text? | Sinopsis |
 | `cover_url` | String? | URL de portada |
-| `external_id` | String? | ID externo (p.ej. `"gcd-123456"`) |
-| `external_api` | String? | Origen (`"gcd"` \| `"google_books"` \| `"open_library"` \| ...) |
-| `metadata` | Json? | Datos adicionales de la fuente externa |
-| `isbn` | String? | ISBN |
+| `isbn` | String unique | ISBN — obligatorio, clave de deduplicación |
 | `binding` | BindingFormat? | Encuadernación (enum) |
 | `drawing_style` | String? | Estilo de dibujo |
-| `series` | String? | Nombre de serie **denormalizado** (fallback si no hay FK) |
-| `series_id` | String? | FK → series (`onDelete: SetNull`) |
+| `authors` | String? | Autores (texto libre) |
+| `scriptwriter` | String? | Guionista |
+| `artist` | String? | Dibujante/artista |
+| `created_by` | String? | null = importado de ISBNdb; userId = creado manualmente |
 | `created_at` | DateTime | — |
 | `updated_at` | DateTime | — |
 
-**Nota:** `series` (texto libre) se mantiene como fallback para cómics importados antes de la entidad `Series`. Para nuevos imports de GCD, se crea/enlaza automáticamente la entidad `Series` y se rellena `series_id`.
-
 ---
 
-### `user_comics` *(tabla pivote Usuario ↔ Cómic)*
+### `user_comics`
 
-Multi-status: un cómic puede tener varios estados activos a la vez.
+Tabla pivote Usuario ↔ Cómic. Representa la entrada del cómic en la biblioteca personal del usuario.
+
+El sistema de estados tiene tres grupos **independientes** y **acumulables**:
 
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | String (cuid) | PK |
+| `collection_status` | CollectionStatus? | Grupo 1: posesión (`IN_COLLECTION`, `WISHLIST`, `LOANED`) |
+| `read_status` | ReadStatus? | Grupo 2: lectura (`READ`, `READING`, `TO_READ`) |
+| `sale_status` | SaleStatus? | Grupo 3: venta (`FOR_SALE`, `TO_SELL`, `SOLD`) |
+| `loaned_to` | String? | Nombre de quien tiene prestado el cómic |
+| `rating` | Int? | 1–5, null si no ha puntuado |
+| `notes` | Text? | Notas personales |
+| `added_at` | DateTime | Fecha de adición a la biblioteca |
+| `series_position` | Int? | Posición manual dentro de la serie |
+| `collection_series_id` | String? | FK → collection_series (null si cómic libre) |
 | `user_id` | String | FK → users |
 | `comic_id` | String | FK → comics |
-| `is_owned` | Boolean | "Tengo" (default false) |
-| `is_read` | Boolean | "Leído" (default false) |
-| `is_wishlist` | Boolean | "Lista de deseos" (default false) |
-| `is_favorite` | Boolean | "Favorito" (default false) |
-| `is_loaned` | Boolean | "Prestado" (default false) |
-| `loaned_to` | String? | Nombre de la persona que lo tiene prestado |
-| `rating` | Int? | 1–5, null si no puntuado |
-| `notes` | Text? | Notas personales |
-| `added_at` | DateTime | Fecha de adición |
+
+**Overrides por usuario** (toman prioridad sobre el registro canónico `comics` al mostrar datos):
+
+| Campo | Tipo |
+|---|---|
+| `title_override` | String? |
+| `issue_number_override` | String? |
+| `publisher_override` | String? |
+| `year_override` | Int? |
+| `synopsis_override` | Text? |
+| `cover_url_override` | String? |
+| `binding_override` | BindingFormat? |
+| `drawing_style_override` | String? |
+| `authors_override` | String? |
+| `scriptwriter_override` | String? |
+| `artist_override` | String? |
+
+**Nota:** Los overrides solo aplican a usuarios que **no** son el `created_by` del cómic.
 
 **Constraint único:** `(user_id, comic_id)` — un usuario no puede tener el mismo cómic duplicado.
+
+**Regla de exclusión:** `SOLD` (grupo 3) implica `collection_status = null` (el cómic ya no está en posesión del usuario).
 
 ---
 
 ### `collections`
 
+Colección temática del usuario (ej. "Mi colección de Astérix").
+
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | String (cuid) | PK |
-| `name` | String | Nombre de la colección |
+| `name` | String | Nombre |
 | `description` | Text? | Descripción |
-| `is_public` | Boolean | Si es visible públicamente (default false) |
-| `user_id` | String | FK → users |
+| `is_public` | Boolean | Visible públicamente (default false) |
+| `rating` | Int? | Valoración global de la colección |
 | `created_at` | DateTime | — |
+| `user_id` | String | FK → users |
 
 ---
 
-### `collection_comics` *(tabla pivote Collection ↔ Comic)*
+### `collection_series`
+
+Serie dentro de una Colección (ej. "Principal", "Edición Deluxe", "Arco 1").
 
 | Campo | Tipo | Descripción |
 |---|---|---|
+| `id` | String (cuid) | PK |
+| `name` | String | Nombre de la serie |
+| `is_default` | Boolean | `true` si es la serie "Principal" creada automáticamente |
+| `position` | Int | Orden dentro de la colección (default 0) |
+| `total_volumes` | Int? | Número de volúmenes esperados en esta serie |
+| `created_at` | DateTime | — |
 | `collection_id` | String | FK → collections |
-| `comic_id` | String | FK → comics |
-| `added_at` | DateTime | Fecha de adición |
-
-**PK compuesta:** `(collection_id, comic_id)`.
 
 ---
 
 ### `tags`
 
+Etiquetas para categorizar cómics. Asignadas manualmente o por el agente IA.
+
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | String (cuid) | PK |
-| `name` | String unique | Nombre legible (ej. "superhéroe") |
-| `slug` | String unique | Versión URL-safe (ej. "superheroe") |
+| `name` | String unique | Nombre legible (ej. "línea clara") |
+| `slug` | String unique | Versión URL-safe (ej. "linea-clara") |
 
 ---
 
-### `comic_tags` *(tabla pivote Comic ↔ Tag)*
+### `comic_tags` *(M:N Comic ↔ Tag)*
 
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `comic_id` | String | FK → comics |
-| `tag_id` | String | FK → tags |
+| Campo | Tipo |
+|---|---|
+| `comic_id` | String — FK → comics |
+| `tag_id` | String — FK → tags |
 
 **PK compuesta:** `(comic_id, tag_id)`.
 
 ---
 
-## MySQL — GCD (`comics_db`)
+## Enums
 
-Base de datos de solo lectura. El dump oficial de [Grand Comics Database](https://www.comics.org/download/) contiene ~75 tablas. Koma solo usa las siguientes:
-
-### Tablas usadas
-
-#### `gcd_issue`
-Un número concreto de una serie.
-
-Columnas clave:
-| Columna | Descripción |
+### `BindingFormat`
+| Valor | Descripción |
 |---|---|
-| `id` | PK |
-| `series_id` | FK → gcd_series |
-| `number` | Número del ejemplar ("404", "Annual 1") |
-| `key_date` | Fecha en formato `YYYY-MM-DD` (extraer año con `LIKE '1986%'`) |
-| `page_count` | Total de páginas (decimal) |
-| `price` | Precio de portada (texto) |
-| `on_sale_date` | Fecha de venta |
-| `barcode` | Código de barras |
-| `isbn` | ISBN (crudo) |
-| `valid_isbn` | ISBN normalizado, usado para portadas via Open Library |
-| `deleted` | 0 = activo, 1 = eliminado |
+| `CARTONE` | Cartoné (tapa dura con lomo cuadrado) |
+| `TAPA_BLANDA` | Tapa blanda |
+| `BOLSILLO` | Formato bolsillo |
+| `OMNIBUS` | Ómnibus (recopilatorio) |
+| `HARDCOVER` | Tapa dura (formato americano) |
+| `DIGITAL` | Digital |
+
+
+### `CollectionStatus` (Grupo 1 — posesión)
+| Valor | Descripción |
+|---|---|
+| `IN_COLLECTION` | Lo poseo físicamente |
+| `WISHLIST` | Lo quiero conseguir |
+| `LOANED` | Lo tengo prestado a alguien |
+
+### `ReadStatus` (Grupo 2 — lectura)
+| Valor | Descripción |
+|---|---|
+| `READ` | Leído |
+| `READING` | Leyendo actualmente |
+| `TO_READ` | Pendiente de leer |
+
+### `SaleStatus` (Grupo 3 — venta/mercadillo)
+| Valor | Descripción |
+|---|---|
+| `FOR_SALE` | A la venta |
+| `TO_SELL` | Quiero venderlo (en algún momento) |
+| `SOLD` | Vendido (implica `collection_status = null`) |
 
 ---
 
-#### `gcd_series`
-Una serie de cómics.
+## Comandos de base de datos
 
-Columnas clave:
-| Columna | Descripción |
-|---|---|
-| `id` | PK |
-| `name` | Nombre de la serie |
-| `publisher_id` | FK → gcd_publisher |
-| `year_began` | Año de inicio |
-| `year_ended` | Año de fin (null si sigue activa) |
-| `issue_count` | Total de números |
-| `format` | Formato (ej. "comic") |
-| `color` | Información de color |
-| `dimensions` | Dimensiones físicas |
-| `paper_stock` | Tipo de papel |
-| `binding` | Tipo de encuadernación |
-| `publishing_format` | Formato de publicación |
-| `publication_dates` | Fechas de publicación (texto libre) |
+```bash
+# Ver estado de la BD
+npx prisma studio
 
----
+# Aplicar un cambio de schema con historial de migración
+# 1. Editar prisma/schema.prisma
+# 2. Ejecutar:
+npx prisma migrate dev --name descripcion_del_cambio
+# 3. Commit tanto schema.prisma como la nueva carpeta en prisma/migrations/
 
-#### `gcd_publisher`
-Editorial.
+# Regenerar tipos Prisma (sin tocar BD)
+npx prisma generate
 
-| Columna | Descripción |
-|---|---|
-| `id` | PK |
-| `name` | Nombre de la editorial |
-| `year_began` | Año de fundación |
-| `year_ended` | Año de cierre (null si sigue activa) |
-| `url` | Web oficial |
-
----
-
-#### `gcd_story`
-Una historia/relato dentro de un número. Un número puede tener varias historias.
-
-Columnas clave:
-| Columna | Descripción |
-|---|---|
-| `id` | PK |
-| `issue_id` | FK → gcd_issue |
-| `sequence_number` | Orden dentro del número (**NO** usar `sequence`) |
-| `title` | Título de la historia |
-| `type_id` | FK → gcd_story_type |
-| `page_count` | Páginas de esta historia |
-| `synopsis` | Sinopsis |
-| `genre` | Género (texto libre) |
-| `characters` | Personajes (texto libre, separados por `;`) |
-| `feature` | Personaje/feature principal |
-| `first_line` | Primera línea de diálogo |
-| `script` | Guionista(s) — texto libre, separado por comas |
-| `pencils` | Dibujante(s) — texto libre |
-| `inks` | Entintador(es) — texto libre (**NO** usar `inking`) |
-| `colors` | Colorista(s) — texto libre (**NO** usar `coloring`) |
-| `letters` | Rotulador(es) — texto libre (**NO** usar `lettering`) |
-| `editing` | Editor(es) — texto libre |
-| `deleted` | 0 = activo |
-
-**Nota sobre créditos:** Los créditos están como texto libre separado por comas/punto y coma. El valor `"?"` significa autor desconocido y debe filtrarse. No existe tabla `gcd_credit` en el dump.
-
----
-
-#### `gcd_story_type`
-Tipos de historia (ej. "Comic Story", "Text Story", "Cover", "Advertisement").
-
-| Columna | Descripción |
-|---|---|
-| `id` | PK |
-| `name` | Nombre del tipo |
-
----
-
-#### `gcd_creator`
-Creadores (para búsqueda por creador vía `gcd_story_credit`).
-
-| Columna | Descripción |
-|---|---|
-| `id` | PK |
-| `gcd_official_name` | Nombre oficial |
-
----
-
-### Joins habituales
-
-```sql
--- Búsqueda de issues (base)
-SELECT i.id, s.name AS series_name, i.number, i.key_date, p.name AS publisher_name
-FROM   gcd_issue     i
-JOIN   gcd_series    s ON s.id = i.series_id
-JOIN   gcd_publisher p ON p.id = s.publisher_id
-WHERE  i.deleted = 0 AND s.deleted = 0
-
--- Filtrar por año (extraer de key_date)
-AND i.key_date LIKE '1986%'
-
--- Historias de un número, ordenadas
-SELECT title, sequence_number, page_count, synopsis, genre, characters
-FROM   gcd_story
-WHERE  issue_id = ? AND deleted = 0
-ORDER  BY sequence_number
-
--- Tipo de historia
-LEFT JOIN gcd_story_type st ON st.id = s.type_id
-
--- Datos de serie y editorial para detalle
-JOIN gcd_series    s ON s.id = i.series_id
-JOIN gcd_publisher p ON p.id = s.publisher_id
-WHERE i.id = ?
+# Verificar que migraciones y schema están en sync
+npx prisma migrate status
 ```
 
----
-
-### Tablas que NO existen en el dump
-
-- `gcd_credit` — **NO existe**. Usar campos de texto de `gcd_story` para créditos.
-- `gcd_cover` — **NO existe** en dumps recientes.
-- `gcd_credit_type` — referenciada por `gcd_story_credit.credit_type_id` pero no incluida.
+> **Nota:** Este proyecto usa `prisma migrate dev` con historial de migraciones en `prisma/migrations/`. El baseline del schema actual está en `20260420180931_init`.
+>
+> **Shadow database:** Neon no soporta creación de shadow databases. Para usar `migrate dev` localmente, configura `SHADOW_DATABASE_URL` en `.env` apuntando a una instancia PostgreSQL local, o usa `prisma migrate diff` + `prisma migrate resolve --applied` para crear migraciones manualmente.

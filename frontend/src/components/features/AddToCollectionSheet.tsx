@@ -5,6 +5,7 @@ import { Plus, Search, ChevronLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { collectionsApi } from '@/api/collections'
 import { collectionSeriesApi } from '@/api/collection-series'
+import { libraryApi } from '@/api/library'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -14,32 +15,41 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 
-export function AddToCollectionDialog({
-  open,
-  onClose,
-  count,
-  onConfirm,
-}: {
+interface AddToCollectionSheetProps {
+  mode: 'single' | 'multiple'
   open: boolean
-  onClose: () => void
-  count: number
-  onConfirm: (collectionId: string, seriesId: string) => Promise<void>
-}) {
+  onOpenChange: (open: boolean) => void
+  selectedComicIds: string[]
+  currentCollectionId?: string
+  currentSeriesId?: string
+  onSuccess?: () => void
+}
+
+export function AddToCollectionSheet({
+  mode,
+  open,
+  onOpenChange,
+  selectedComicIds,
+  currentCollectionId,
+  currentSeriesId,
+  onSuccess,
+}: AddToCollectionSheetProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const count = selectedComicIds.length
 
-  // Step 1 — collection
   const [step, setStep] = useState<'collection' | 'series'>('collection')
-  const [selectedId, setSelectedId] = useState('')
+  const [selectedId, setSelectedId] = useState(currentCollectionId ?? '')
   const [newName, setNewName] = useState('')
   const [creatingNew, setCreatingNew] = useState(false)
   const [collectionSearch, setCollectionSearch] = useState('')
 
-  // Step 2 — series
-  const [resolvedCollectionId, setResolvedCollectionId] = useState('')
-  const [selectedSeriesId, setSelectedSeriesId] = useState('')
-  const [creatingNewSeries, setCreatingNewSeries] = useState(false)
-  const [newSeriesName, setNewSeriesName] = useState('')
+  const [resolvedCollectionId, setResolvedCollectionId] = useState(currentCollectionId ?? '')
+  const [selectedSeriesId, setSelectedSeriesId] = useState(currentSeriesId ?? '')
+
+  // Tracks whether the user just created a new collection (to show editable series name in step 2)
+  const [isNewCollection, setIsNewCollection] = useState(false)
+  const [editingSeriesName, setEditingSeriesName] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
 
@@ -52,7 +62,7 @@ export function AddToCollectionDialog({
   const { data: seriesList, isLoading: isLoadingSeries } = useQuery({
     queryKey: ['collection-series', resolvedCollectionId],
     queryFn: () => collectionSeriesApi.getByCollection(resolvedCollectionId),
-    enabled: step === 'series' && !!resolvedCollectionId,
+    enabled: step === 'series' && !!resolvedCollectionId && !isNewCollection,
   })
 
   const filteredCollections = useMemo(() => {
@@ -64,29 +74,44 @@ export function AddToCollectionDialog({
 
   function handleClose() {
     setStep('collection')
-    setSelectedId('')
+    setSelectedId(currentCollectionId ?? '')
     setNewName('')
     setCreatingNew(false)
     setCollectionSearch('')
-    setResolvedCollectionId('')
-    setSelectedSeriesId('')
-    setCreatingNewSeries(false)
-    setNewSeriesName('')
-    onClose()
+    setResolvedCollectionId(currentCollectionId ?? '')
+    setSelectedSeriesId(currentSeriesId ?? '')
+    setIsNewCollection(false)
+    setEditingSeriesName('')
+    onOpenChange(false)
+  }
+
+  async function invalidateAfterSave() {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['collections'] }),
+      qc.invalidateQueries({ queryKey: ['library'] }),
+      qc.invalidateQueries({ queryKey: ['library-series-view'] }),
+    ])
+    onSuccess?.()
   }
 
   async function handleNext() {
     setSubmitting(true)
     try {
-      let collectionId = selectedId
       if (creatingNew) {
         if (!newName.trim()) return
-        const col = await collectionsApi.create({ name: newName.trim(), isPublic: false })
-        collectionId = col.id
-        qc.invalidateQueries({ queryKey: ['collections'] })
+        // Create the collection (and its default "Principal" series), then advance to step 2
+        // so the user can rename the series before comics are added.
+        const result = await collectionsApi.create({ name: newName.trim(), isPublic: false })
+        setResolvedCollectionId(result.collection.id)
+        setSelectedSeriesId(result.series.id)
+        setIsNewCollection(true)
+        setEditingSeriesName(result.series.name)
+        setStep('series')
+        return
       }
-      if (!collectionId) return
-      setResolvedCollectionId(collectionId)
+      if (!selectedId) return
+      setResolvedCollectionId(selectedId)
+      setSelectedSeriesId('')
       setStep('series')
     } catch {
       toast.error(t('collections.addComicError'))
@@ -99,17 +124,34 @@ export function AddToCollectionDialog({
     setSubmitting(true)
     try {
       let seriesId = selectedSeriesId
-      if (creatingNewSeries) {
-        if (!newSeriesName.trim()) return
-        const series = await collectionSeriesApi.create(resolvedCollectionId, newSeriesName.trim())
-        seriesId = series.id
+
+      if (isNewCollection) {
+        // seriesId was already set when the collection was created
+        if (!seriesId) return
+        // Rename the default series if the user changed it
+        const trimmedName = editingSeriesName.trim()
+        if (trimmedName) {
+          await collectionSeriesApi.update(resolvedCollectionId, seriesId, { name: trimmedName })
+        }
+      } else {
+        // Existing collection: fall back to the default (Principal) series if none selected
+        if (!seriesId) {
+          const principal = seriesList?.find((s) => s.isDefault)
+          seriesId = principal?.id ?? ''
+        }
+        if (!seriesId) return
       }
-      if (!seriesId) {
-        const principal = seriesList?.find((s) => s.isDefault)
-        seriesId = principal?.id ?? ''
-      }
-      if (!seriesId) return
-      await onConfirm(resolvedCollectionId, seriesId)
+
+      await libraryApi.addMultipleToCollection({
+        comicIds: selectedComicIds,
+        collectionSeriesId: seriesId,
+      })
+      toast.success(
+        mode === 'single'
+          ? t('collections.addComicSuccess')
+          : t('collections.addMultipleSuccess', { count }),
+      )
+      await invalidateAfterSave()
       handleClose()
     } catch {
       toast.error(t('collections.addComicError'))
@@ -119,7 +161,6 @@ export function AddToCollectionDialog({
   }
 
   const canNext = !submitting && (creatingNew ? newName.trim().length > 0 : selectedId.length > 0)
-  const canConfirm = !submitting && (creatingNewSeries ? newSeriesName.trim().length > 0 : true)
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
@@ -129,7 +170,7 @@ export function AddToCollectionDialog({
             {step === 'series' && (
               <button
                 type="button"
-                onClick={() => setStep('collection')}
+                onClick={() => { setStep('collection'); setIsNewCollection(false); setEditingSeriesName('') }}
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ChevronLeft className="size-5" />
@@ -138,12 +179,14 @@ export function AddToCollectionDialog({
             <SheetTitle className="text-lg">
               {step === 'collection'
                 ? t('collections.addToCollectionTitle', { count })
-                : t('collections.pickSeriesTitle')}
+                : isNewCollection
+                  ? t('collections.configureSeriesTitle')
+                  : t('collections.pickSeriesTitle')}
             </SheetTitle>
           </div>
         </SheetHeader>
 
-        {/* ── Step 1: Collection ─────────────────────────────────────────── */}
+        {/* ── Step 1: Collection ── */}
         {step === 'collection' && (
           <>
             <div className="px-6 pt-4 pb-2">
@@ -227,27 +270,47 @@ export function AddToCollectionDialog({
                   {t('common.cancel')}
                 </Button>
                 <Button className="flex-1 h-11" disabled={!canNext} onClick={handleNext}>
-                  {submitting ? t('common.saving') : t('common.next')}
+                  {submitting
+                    ? t('common.saving')
+                    : creatingNew
+                      ? t('collections.create')
+                      : t('common.next')}
                 </Button>
               </div>
             </div>
           </>
         )}
 
-        {/* ── Step 2: Series ─────────────────────────────────────────────── */}
+        {/* ── Step 2: Series ── */}
         {step === 'series' && (
           <>
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-1">
-              {isLoadingSeries ? (
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+              {isNewCollection ? (
+                /* New collection: let the user rename the auto-created "Principal" series */
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    {t('collections.seriesNameLabel')}
+                  </label>
+                  <Input
+                    autoFocus
+                    value={editingSeriesName}
+                    onChange={(e) => setEditingSeriesName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !submitting) handleFinalConfirm() }}
+                    className="h-10"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('collections.seriesNameHint')}
+                  </p>
+                </div>
+              ) : isLoadingSeries ? (
                 <p className="text-sm text-muted-foreground text-center py-8">{t('common.loading')}</p>
               ) : (
                 <>
-                  {/* Principal / skip option */}
                   <button
                     type="button"
-                    onClick={() => { setSelectedSeriesId(''); setCreatingNewSeries(false) }}
+                    onClick={() => setSelectedSeriesId('')}
                     className={`w-full text-left px-3 py-3 rounded-lg text-sm border transition-colors flex items-center justify-between gap-2 ${
-                      !selectedSeriesId && !creatingNewSeries
+                      !selectedSeriesId
                         ? 'border-primary bg-primary/5 font-medium'
                         : 'border-border hover:bg-muted/40'
                     }`}
@@ -255,14 +318,13 @@ export function AddToCollectionDialog({
                     <span className="truncate">{t('collections.principalSeries')}</span>
                     <span className="text-xs text-primary font-bold">{t('collections.default')}</span>
                   </button>
-
                   {seriesList
                     ?.filter((s) => !s.isDefault)
                     .map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        onClick={() => { setSelectedSeriesId(s.id); setCreatingNewSeries(false) }}
+                        onClick={() => setSelectedSeriesId(s.id)}
                         className={`w-full text-left px-3 py-3 rounded-lg text-sm border transition-colors flex items-center justify-between gap-2 ${
                           selectedSeriesId === s.id
                             ? 'border-primary bg-primary/5 font-medium'
@@ -279,35 +341,16 @@ export function AddToCollectionDialog({
               )}
             </div>
 
-            <div className="border-t border-border px-6 py-4 space-y-3 shrink-0">
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => { setCreatingNewSeries((v) => !v); setSelectedSeriesId('') }}
-                  className={`flex items-center gap-2 text-sm font-medium transition-colors ${
-                    creatingNewSeries ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Plus className="size-4" />
-                  {t('collections.createSeriesTitle')}
-                </button>
-                {creatingNewSeries && (
-                  <Input
-                    autoFocus
-                    placeholder={t('collections.seriesNamePlaceholder')}
-                    value={newSeriesName}
-                    onChange={(e) => setNewSeriesName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && canConfirm) handleFinalConfirm() }}
-                    className="h-10"
-                  />
-                )}
-              </div>
-
+            <div className="border-t border-border px-6 py-4 shrink-0">
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 h-11" onClick={handleClose}>
                   {t('common.cancel')}
                 </Button>
-                <Button className="flex-1 h-11" disabled={!canConfirm} onClick={handleFinalConfirm}>
+                <Button
+                  className="flex-1 h-11"
+                  disabled={submitting || (isNewCollection && !editingSeriesName.trim())}
+                  onClick={handleFinalConfirm}
+                >
                   {submitting ? t('common.saving') : t('collections.confirmAdd', { count })}
                 </Button>
               </div>

@@ -1,0 +1,1 @@
+ALTER TYPE "BindingFormat" ADD VALUE 'SOFTCOVER';

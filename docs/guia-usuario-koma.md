@@ -1,6 +1,6 @@
 # Guía completa de Koma
 
-**Koma** es tu gestor personal de colección de cómics. Registra lo que tienes, lo que has leído, lo que quieres comprar, y organiza todo en colecciones. Con integración en bases de datos especializadas y recomendaciones por inteligencia artificial.
+**Koma** es tu gestor personal de colección de cómics. Registra lo que tienes, lo que has leído, lo que quieres comprar, y organiza todo en colecciones. Usa **ISBNdb** para importar metadatos de millones de libros y cómics, y cuenta con recomendaciones por inteligencia artificial.
 
 ---
 
@@ -13,10 +13,9 @@
 5. [Detalle de un cómic](#5-detalle-de-un-cómic)
 6. [Colecciones — agrupar y organizar](#6-colecciones--agrupar-y-organizar)
 7. [Descubrir — recomendaciones IA y resumen de series](#7-descubrir--recomendaciones-ia-y-resumen-de-series)
-8. [Búsqueda avanzada: ISBNDB](#8-búsqueda-avanzada-isbndb)
-9. [Importar desde Tebeosfera](#9-importar-desde-tebeosfera)
-10. [Ajustes de cuenta](#10-ajustes-de-cuenta)
-11. [Próximas funcionalidades](#11-próximas-funcionalidades)
+8. [Importar y exportar datos](#8-importar-y-exportar-datos)
+9. [Ajustes de cuenta](#9-ajustes-de-cuenta)
+10. [Próximas funcionalidades](#10-próximas-funcionalidades)
 
 ---
 
@@ -43,10 +42,10 @@ Al entrar verás el **panel de inicio** con un resumen de tu colección:
 
 | Tarjeta | Qué muestra |
 |---|---|
-| **En colección** | Cómics que tienes físicamente |
-| **Leídos** | Cómics que ya has leído |
-| **Lista de deseos** | Lo que quieres comprar |
-| **Favoritos** | Tus cómics preferidos |
+| **En colección** | Cómics que tienes físicamente (`IN_COLLECTION`) |
+| **Leídos** | Cómics que ya has leído (`READ`) |
+| **Lista de deseos** | Lo que quieres comprar (`WISHLIST`) |
+| **Prestados** | Cómics que tienes prestados a alguien (`LOANED`) |
 
 - Al hacer clic en cualquier tarjeta vas directamente a tu biblioteca filtrada por ese estado
 - También verás tu **valoración media** de todos los cómics puntuados
@@ -58,28 +57,26 @@ Al entrar verás el **panel de inicio** con un resumen de tu colección:
 
 Tienes tres formas de añadir cómics:
 
-### A) Buscar en GCD (Grand Comics Database)
+### A) Buscar en ISBNdb
 
-La forma principal y más completa:
+La forma principal:
 
 1. Ve a **Buscar** en el menú lateral
-2. Escribe el nombre de la serie, personaje o título (ej. *Akira*, *Astérix*, *Batman*)
-3. Puedes afinar con filtros:
-   - **Editorial**: ej. *Marvel*, *Dargaud*, *Norma*
-   - **Autor/dibujante**: ej. *Moebius*, *Goscinny*
-   - **Año de publicación**
-4. Los resultados muestran las series encontradas — haz clic en **Ver números** para ver todos los números de esa serie
-5. Haz clic en el número que quieras y pulsa **Añadir a biblioteca**
+2. Escribe el **título**, **autor** o **editorial** del cómic (ej. *Akira*, *Alan Moore*, *Dargaud*)
+3. Los resultados muestran portada, título, autores, año e ISBN
+4. Pulsa **Añadir a biblioteca** en el resultado
 
-> GCD es una base de datos especializada en cómics con millones de registros de todo el mundo. Los datos importados incluyen portada, editorial, año, páginas, creadores y sinopsis.
+También puedes escribir directamente un **código ISBN** (10 o 13 dígitos) para localizar una edición exacta.
 
-### B) Buscar por ISBN (ISBNDB)
+> ISBNdb es una base de datos global con más de 35 millones de libros y cómics. Los datos importados incluyen portada, editorial, año, autores y sinopsis.
 
-Para cómics con ISBN (novelas gráficas, álbumes europeos, ediciones especiales):
+### B) Añadir por ISBN directo
 
-1. Ve a **ISBNDB** en el menú lateral
-2. Busca por **título**, **autor**, **editorial**, **tema** o directamente por **código ISBN**
-3. Haz clic en **Añadir a biblioteca** en el resultado
+Para añadir un cómic sabiendo su ISBN sin hacer búsqueda:
+
+1. Ve a **Buscar**
+2. Introduce el ISBN en el campo de búsqueda
+3. Koma lo localiza automáticamente en ISBNdb y lo añade a tu biblioteca en un solo paso
 
 ### C) Crear manualmente
 
@@ -102,7 +99,7 @@ Tu biblioteca muestra todos los cómics en una cuadrícula con su portada. Cada 
 - Número de issue y editorial
 - Año de publicación
 - **Etiquetas** personalizadas (si las has añadido)
-- Insignias de estado (En colección, Leído, Favorito, Prestado...)
+- Insignias de estado (En colección, Leído, Wishlist, Prestado, A la venta...)
 
 ### Filtrar tu biblioteca
 
@@ -111,10 +108,12 @@ Tu biblioteca muestra todos los cómics en una cuadrícula con su portada. Cada 
 | Filtro | Qué muestra |
 |---|---|
 | **Todos** | Toda la biblioteca |
-| **En colección** | Lo que tienes físicamente |
-| **Leídos** | Lo que ya has leído |
-| **Lista de deseos** | Lo que quieres comprar |
-| **Favoritos** | Tus preferidos |
+| **En colección** (`IN_COLLECTION`) | Lo que tienes físicamente |
+| **Lista de deseos** (`WISHLIST`) | Lo que quieres comprar |
+| **Prestados** (`LOANED`) | Lo que tienes prestado |
+| **Leídos** (`READ`) | Lo que ya has leído |
+| **Leyendo** (`READING`) | Lo que estás leyendo ahora |
+| **A la venta** (`FOR_SALE`) | Lo que quieres vender |
 
 **Por búsqueda libre**: escribe en la barra de búsqueda para filtrar por título, serie o editorial en tiempo real.
 
@@ -165,15 +164,28 @@ Haz clic en cualquier cómic para ver su página de detalle completa.
 
 ### Tu estado personal
 
-Marca uno o varios estados según corresponda:
+El sistema de estados tiene tres grupos **independientes** — puedes combinarlos libremente:
 
+**Posesión:**
 | Estado | Cuándo usarlo |
 |---|---|
-| **Tengo** | Lo tienes en tu estantería |
-| **Leído** | Ya lo has leído |
-| **Lo quiero** | Está en tu lista de deseos |
-| **Favorito** | Es uno de tus preferidos |
-| **Prestado** | Lo tienes prestado — puedes escribir **a quién** |
+| **En colección** (`IN_COLLECTION`) | Lo tienes en tu estantería |
+| **Lista de deseos** (`WISHLIST`) | Lo quieres conseguir |
+| **Prestado** (`LOANED`) | Lo tienes prestado — puedes escribir a quién |
+
+**Lectura:**
+| Estado | Cuándo usarlo |
+|---|---|
+| **Leído** (`READ`) | Ya lo has leído |
+| **Leyendo** (`READING`) | Lo estás leyendo ahora |
+| **Pendiente** (`TO_READ`) | Lo quieres leer |
+
+**Venta:**
+| Estado | Cuándo usarlo |
+|---|---|
+| **A la venta** (`FOR_SALE`) | Lo pones a la venta |
+| **Quiero venderlo** (`TO_SELL`) | Lo venderás en algún momento |
+| **Vendido** (`SOLD`) | Ya no lo tienes — se limpia "En colección" automáticamente |
 
 ### Valoración con estrellas
 
@@ -196,10 +208,6 @@ Pulsa el botón de **Editar** para modificar la portada, encuadernación, estilo
 Si el cómic tiene ISBN, puedes:
 - **Copiar el ISBN** con un clic para buscarlo tú mismo
 - Acceder a tiendas online para localizarlo
-
-### Integración con Tebeosfera
-
-Para series españolas y europeas, la ficha muestra información adicional procedente de Tebeosfera, la mayor base de datos del cómic en español.
 
 ---
 
@@ -258,48 +266,31 @@ Debajo de las recomendaciones tienes un resumen de todas las series presentes en
 
 ---
 
-## 8. Búsqueda avanzada: ISBNDB
+## 8. Importar y exportar datos
 
-**ISBNDB** es una base de datos con millones de libros y novelas gráficas de todo el mundo. Accede desde el menú lateral.
+### Importar desde CSV
 
-### Tipos de búsqueda disponibles
+Puedes importar tu colección existente desde un archivo CSV:
 
-| Pestaña | Para qué sirve |
+1. Ve a **Ajustes** → **Datos**
+2. Pulsa **Importar CSV**
+3. Sube el archivo. Los cómics se crean y se añaden a tu biblioteca automáticamente
+4. Los cómics que ya existen (mismos ISBN) no se duplican
+
+### Exportar tu biblioteca
+
+Descarga una copia completa de tu biblioteca en cualquier momento:
+
+| Formato | Uso |
 |---|---|
-| **Libros** | Busca por título, autor, editorial o tema |
-| **Por ISBN** | Busca un ejemplar exacto por su código ISBN-10 o ISBN-13 |
-| **Autores** | Busca por nombre de autor y ve todos sus libros |
-| **Editoriales** | Explora el catálogo completo de una editorial |
-| **Temas** | Busca por género o temática (ej. *Comics*, *Manga*, *Noir*) |
-| **Estadísticas** | Datos globales de la base de datos en tiempo real |
+| **CSV** | Compatible con Excel, Google Sheets u otras apps |
+| **JSON** | Copia de seguridad completa con todos los campos |
 
-### Filtros avanzados
-
-- **Idioma**: filtra por español, francés, inglés, italiano, alemán, portugués, neerlandés o catalán
-- **Rango de años**: acota los resultados por fecha de publicación
-- **Agrupación**: agrupa resultados por edición o tipo de encuadernación
-
-### Importar desde ISBNDB
-
-Haz clic en **Añadir a biblioteca** en cualquier resultado para importarlo directamente a Koma con todos sus metadatos.
+Ambos formatos incluyen **todos** los cómics sin paginación, con campos: título, editorial, año, ISBN, encuadernación, estado, valoración y notas.
 
 ---
 
-## 9. Importar desde Tebeosfera
-
-**Tebeosfera** es la mayor base de datos del cómic español y europeo. Desde Koma puedes importar colecciones enteras de golpe.
-
-1. Ve a **Tebeosfera** en el menú lateral
-2. Busca el nombre de la colección que quieres importar (ej. *Astérix*, *Tintín*, *Mortadelo*)
-3. Haz clic en **Ver números** para ver el listado de todos los números de esa colección
-4. Pulsa **Importar colección** para añadirlos todos a tu biblioteca de una vez
-5. Los cómics ya existentes en tu catálogo se omiten automáticamente para no duplicar
-
-> Los cómics importados desde Tebeosfera aparecen en tu biblioteca como referencia. Márcalos como **Tengo** una vez que los tengas físicamente.
-
----
-
-## 10. Ajustes de cuenta
+## 9. Ajustes de cuenta
 
 Ve a **Ajustes** en el menú para personalizar tu experiencia.
 
@@ -317,15 +308,9 @@ Ve a **Ajustes** en el menú para personalizar tu experiencia.
 
 - **Cambiar contraseña**: introduce tu contraseña actual y luego la nueva (mínimo 6 caracteres, con confirmación)
 
-### Exportar tu biblioteca
-
-Descarga una copia completa de tu biblioteca:
-- **CSV** — para abrir en Excel, Google Sheets o cualquier hoja de cálculo
-- **JSON** — copia de seguridad técnica completa con todos los datos
-
 ---
 
-## 11. Próximas funcionalidades
+## 10. Próximas funcionalidades
 
 Estas son las mejoras que están en desarrollo y llegarán próximamente:
 
@@ -333,6 +318,5 @@ Estas son las mejoras que están en desarrollo y llegarán próximamente:
 |---|---|
 | **Diseño adaptado a móvil** | La app funcionará perfectamente en teléfonos y tablets, con menú lateral colapsable |
 | **Lector de código de barras** | Apunta la cámara del móvil al ISBN de un cómic para añadirlo automáticamente a tu biblioteca sin escribir nada |
-| **Importación desde CSV** | Sube un fichero CSV con tu colección existente para migrar de golpe desde otra app o hoja de cálculo |
-| **Compatibilidad con Whakoom** | Exporta tu colección en formato compatible con Whakoom para mover tus datos entre plataformas |
+| **Exportación compatible con Whakoom** | Exporta tu colección en formato compatible con Whakoom para mover tus datos entre plataformas |
 | **Alertas de nuevas publicaciones** | Recibe una notificación cuando salga un nuevo número de las series que sigues |

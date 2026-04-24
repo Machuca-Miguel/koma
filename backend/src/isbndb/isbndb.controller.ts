@@ -21,6 +21,7 @@ import { IsbndbService } from './isbndb.service';
 import { SearchBooksDto } from './dto/search-books.dto';
 import { SearchCommonDto, SearchQueryDto } from './dto/search-common.dto';
 import type { IsbndbBook } from './interfaces/isbndb.interface';
+import { normalizeBinding } from './binding.utils';
 
 class BulkIsbnDto {
   @IsArray()
@@ -181,6 +182,7 @@ export class IsbndbController {
         coverUrl: book.image,
         isbn,
         authors: book.authors?.join(', ') || undefined,
+        binding: normalizeBinding(book.binding),
       },
     });
 

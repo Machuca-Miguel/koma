@@ -28,7 +28,7 @@ model User {
   @@map("users")
 }
 
-// Volumen / Cómic — puede estar en una CollectionSeries o ser libre (null)
+// Volumen / Cómic — registro canónico, inmutable tras creación salvo por su creador
 model Comic {
   id           String         @id @default(cuid())
   title        String
@@ -37,15 +37,14 @@ model Comic {
   year         Int?
   synopsis     String?        @db.Text
   coverUrl     String?        @map("cover_url")
-  isbn         String?
+  isbn         String         @unique               // obligatorio, no editable
   binding      BindingFormat?
   drawingStyle String?        @map("drawing_style")
   authors      String?
   scriptwriter String?
   artist       String?
-  // Pertenece a una Serie (null = libre, no asignado a ninguna colección)
-  collectionSeriesId String?           @map("collection_series_id")
-  collectionSeries   CollectionSeries? @relation(fields: [collectionSeriesId], references: [id], onDelete: SetNull)
+  // null = importado desde ISBNdb; userId = creado manualmente por ese usuario
+  createdBy    String?        @map("created_by")
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
@@ -73,6 +72,11 @@ model UserComic {
   notes            String?           @db.Text
   addedAt          DateTime          @default(now()) @map("added_at")
   seriesPosition   Int?              @map("series_position")
+  // Serie a la que el usuario asigna este cómic (per-user, no global)
+  collectionSeriesId String?           @map("collection_series_id")
+  collectionSeries   CollectionSeries? @relation(fields: [collectionSeriesId], references: [id], onDelete: SetNull)
+
+  override  UserComicOverride?
 
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String @map("user_id")
@@ -89,6 +93,9 @@ enum BindingFormat {
   BOLSILLO
   OMNIBUS
   HARDCOVER
+  SOFTCOVER
+  DIGITAL
+  OTHER
 }
 
 // ─── Enums de estado UserComic ─────────────────────────────────────────────────
@@ -144,7 +151,7 @@ model CollectionSeries {
 
   collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   collectionId String     @map("collection_id")
-  comics       Comic[]
+  userComics   UserComic[]
 
   @@map("collection_series")
 }
@@ -158,6 +165,29 @@ model Tag {
   comics ComicTag[]
 
   @@map("tags")
+}
+
+// Overrides personales por usuario para un UserComic concreto.
+// Toman prioridad sobre el registro canónico Comic al mostrar datos.
+// Solo aplican a usuarios que NO son el creador del cómic (comic.createdBy).
+model UserComicOverride {
+  id          String    @id @default(cuid())
+  userComicId String    @unique @map("user_comic_id")
+  userComic   UserComic @relation(fields: [userComicId], references: [id], onDelete: Cascade)
+
+  title        String?
+  issueNumber  String?        @map("issue_number")
+  publisher    String?
+  year         Int?
+  synopsis     String?        @db.Text
+  coverUrl     String?        @map("cover_url")
+  binding      BindingFormat?
+  drawingStyle String?        @map("drawing_style")
+  authors      String?
+  scriptwriter String?
+  artist       String?
+
+  @@map("user_comic_overrides")
 }
 
 // Relación M:N entre Comic y Tag
